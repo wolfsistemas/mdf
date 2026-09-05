@@ -42,12 +42,7 @@ create table if not exists public.profiles (
 -- settings default igual ao do app (defaultSettings em store.js)
 create or replace function public.default_settings()
 returns jsonb language sql stable as $$
-  select '{"kerf":3.2,"trim":0,"cutMode":"guillotine","currency":"BRL",' ||
-         '"sheetWidth":2750,"sheetHeight":1830,"sheetThickness":15,' ||
-         '"sheetPrice":180,"sheetName":"MDF 15 mm 2750x1830",' ||
-         '"tapePricePerMeter":2.5,"tapeName":"Fita PVC 22 mm",' ||
-         '"laborPercent":0,"defaultMargin":100,' ||
-         '"shopName":"MDF Atelier","shopPhone":""}'::jsonb;
+  select '{"kerf":3.2,"trim":0,"cutMode":"guillotine","currency":"BRL","sheetWidth":2750,"sheetHeight":1830,"sheetThickness":15,"sheetPrice":180,"sheetName":"MDF 15 mm 2750x1830","tapePricePerMeter":2.5,"tapeName":"Fita PVC 22 mm","laborPercent":0,"defaultMargin":100,"shopName":"MDF Atelier","shopPhone":""}'::jsonb;
 $$;
 
 -- Cria o perfil automaticamente quando um usuário novo se cadastra.
