@@ -650,13 +650,102 @@ body.landing-mode {
   }
 }
 
+@media (max-width: 920px) {
+  .lhero-visual {
+    margin: 0 auto;
+  }
+
+  .lsection h2 {
+    margin-bottom: 26px;
+  }
+}
+
+/* ---------- smartphone fino (<640px) ---------- */
+
 @media (max-width: 640px) {
   .lnav-links {
     display: none;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .lnav-in {
+    padding: 10px 16px;
+  }
+
+  .landing .lwrap {
+    padding: 0 16px;
+  }
+
+  .lmark {
+    font-size: 13.5px;
+    letter-spacing: 0.12em;
+  }
+
+  .btn-l {
+    min-height: 46px;
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  .btn-l.big {
+    min-height: 50px;
+    font-size: 16px;
+    width: 100%;
+  }
+
+  .lhero-in {
+    grid-template-columns: 1fr;
+    padding: 32px 18px 40px;
+    gap: 32px;
+  }
+
   .lhero h1 {
-    font-size: 30px;
+    font-size: 28px;
+    margin-bottom: 14px;
+  }
+
+  .lkicker {
+    font-size: 10.5px;
+    margin-bottom: 12px;
+  }
+
+  .lsub {
+    font-size: 15.5px;
+    line-height: 1.55;
+    margin-bottom: 20px;
+  }
+
+  .lcta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .lcta .btn-l {
+    width: 100%;
+  }
+
+  .lmini {
+    text-align: left;
+  }
+
+  .lpage {
+    padding: 14px 14px 12px;
+    border-radius: 14px;
+    transform: none;
+    box-shadow: 0 14px 34px rgba(36, 29, 21, 0.16);
+  }
+
+  .lpage-body {
+    padding: 12px 0;
+  }
+
+  .lp-svg {
+    width: 96px;
+    height: 96px;
   }
 
   .lp-visual-row {
@@ -664,7 +753,64 @@ body.landing-mode {
     align-items: flex-start;
   }
 
+  .lprice {
+    font-size: 26px;
+  }
+
+  .lsection {
+    padding: 44px 0;
+  }
+
+  .lcards {
+    gap: 14px;
+  }
+
+  .lplans {
+    gap: 14px;
+  }
+
+  .lplan {
+    padding: 22px 16px 18px;
+  }
+
+  .lplan.hot {
+    padding-top: 26px;
+  }
+
+  .lplan .btn-l {
+    width: 100%;
+  }
+
+  .lfaq details {
+    padding: 4px 14px;
+  }
+
+  .lfaq details p {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .lfaq-cta {
+    margin-top: 20px;
+  }
+
+  .lfoot {
+    padding: 28px 0 16px;
+  }
+
   .lfoot-in {
     flex-direction: column;
+  }
+
+  .lfoot nav {
+    flex-wrap: wrap;
+    gap: 14px;
+    row-gap: 6px;
+  }
+
+  .lfoot nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 }
