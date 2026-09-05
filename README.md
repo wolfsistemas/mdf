@@ -2,7 +2,9 @@
 
 App local para marcenaria: orcamentos por cliente, catalogo de moveis parametricos, nesting (plano de corte), veio, fita de borda, custo com margem e orcamento do cliente pronto para impressao.
 
-Roda no navegador. Os dados ficam salvos no localStorage.
+Roda no navegador. Os dados ficam salvos no localStorage e, opcionalmente,
+podem ser sincronizados com uma conta na nuvem (Supabase) pelo botão
+**Backup na nuvem** na barra lateral.
 
 ## Como usar
 
@@ -88,7 +90,15 @@ Row Level Security). Para criar no seu projeto:
    (o `.env` nao vai para o git).
 
 O schema cria automaticamente um perfil para cada usuario novo (login via
-Supabase Auth, a ser ligado no app). Cada usuario ve apenas os proprios
-orcamentos. `settings` da oficina ficam no perfil; cada orcamento vira uma
-linha em `projects` com os moveis em `furniture` (jsonb), espelhando o que o
-app hoje guarda no localStorage.
+Supabase Auth). Cada usuario ve apenas os proprios orcamentos. `settings` da
+oficina ficam no perfil; cada orcamento vira uma linha em `projects` com os
+moveis em `furniture` (jsonb), espelhando o que o app hoje guarda no
+localStorage.
+
+Depois de rodar o schema, use o botao **Backup na nuvem** (barra lateral) do
+app para criar a conta e sincronizar. Primeiro login com a conta vazia envia os
+dados do navegador para a nuvem; nas proximas vezes a nuvem e a fonte dos dados.
+
+Para o build do GitHub Pages incluir a nuvem, adicione os repositorios secrets
+`SUPABASE_URL` e `SUPABASE_ANON_KEY` (Settings -> Secrets and variables) — sem
+eles o Pages roda apenas no modo local.

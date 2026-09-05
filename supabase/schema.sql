@@ -13,6 +13,12 @@
 
 create extension if not exists pgcrypto;
 
+-- ATENÇÃO: re-executar este script apaga e recria as duas tabelas abaixo
+-- (profiles e projects). É seguro na fase de setup: o app ainda não gravou
+-- nada até você conectar e fazer o primeiro sync.
+drop table if exists public.projects cascade;
+drop table if exists public.profiles cascade;
+
 -- ----------------------------------------------------------------------------
 -- updated_at automático
 -- ----------------------------------------------------------------------------
@@ -29,7 +35,7 @@ end $$;
 create table if not exists public.profiles (
   id                uuid primary key references auth.users (id) on delete cascade,
   settings          jsonb not null default '{}'::jsonb,
-  active_project_id uuid,
+  active_project_id text,
   created_at        timestamptz not null default now()
 );
 
@@ -68,10 +74,10 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ----------------------------------------------------------------------------
--- projects — um orçamento por linha (móveis em jsonb)
--- ----------------------------------------------------------------------------
+-- projects — um orçamento por linha (móveis em jsonb).
+-- id é o id gerado pelo app (texto), preservado para o sync funcionar.
 create table if not exists public.projects (
-  id            uuid primary key default gen_random_uuid(),
+  id            text primary key,
   user_id       uuid not null references auth.users (id) on delete cascade,
   name          text not null default 'Novo orçamento',
   client        text not null default '',
@@ -106,6 +112,10 @@ create policy profiles_select_own on public.profiles
 drop policy if exists profiles_update_own on public.profiles;
 create policy profiles_update_own on public.profiles
   for update using (auth.uid() = id);
+
+drop policy if exists profiles_insert_own on public.profiles;
+create policy profiles_insert_own on public.profiles
+  for insert with check (auth.uid() = id);
 
 -- projects
 drop policy if exists projects_select_own on public.projects;

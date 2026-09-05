@@ -24,6 +24,16 @@ import {
 } from './catalog.js'
 import { schematicSvg } from './schematic.js'
 import { saleCalc as calcItemSale, projectTotals as calcProjectTotals, rateioCtx as calcRateioCtx } from './pricing.js'
+import {
+  isConfigured as cloudConfigured,
+  init as cloudInit,
+  setAuthListener,
+  signIn as cloudSignIn,
+  signUp as cloudSignUp,
+  signOut as cloudSignOut,
+  pullState,
+  schedulePush
+} from './cloud.js'
 import qrcode from 'qrcode-generator'
 qrcode.stringToBytes =
   typeof TextEncoder !== 'undefined'
@@ -40,6 +50,8 @@ let saleCtx = null
 let catalogQuery = ''
 let modal = null
 let editorLView = 'planta'
+let authUser = null
+let syncTimer = null
 const groupOpen = {}
 CATALOG_GROUPS.forEach((g, i) => (groupOpen[g.group] = i === 0))
 
@@ -63,8 +75,14 @@ function recalc() {
 }
 function persist() {
   saveState(state)
+  scheduleCloud()
   recalc()
   render()
+}
+function scheduleCloud() {
+  if (!cloudConfigured() || !authUser) return
+  clearTimeout(syncTimer)
+  syncTimer = setTimeout(() => schedulePush(state), 500)
 }
 function refresh() {
   render()
@@ -325,6 +343,111 @@ function confirmDialog(message) {
   return typeof window.confirm === 'function' ? window.confirm(message) : true
 }
 
+/* ============================== nuvem (Supabase) ============================== */
+
+function cloudChip() {
+  const cls = 'cloud-chip' + (authUser ? ' on' : '')
+  if (authUser) {
+    return h('div', { class: cls }, [
+      h('div', { class: 'cloud-txt' }, [
+        h('strong', {}, ['Nuvem ativa']),
+        h('span', {}, [authUser.email || ''])
+      ]),
+      h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair'])
+    ])
+  }
+  return h('div', { class: cls }, [
+    h('div', { class: 'cloud-txt' }, [
+      h('strong', {}, ['Backup na nuvem']),
+      h('span', {}, ['Entre ou crie uma conta para sincronizar os orçamentos.'])
+    ]),
+    h('button', { class: 'btn small primary', onClick: openAuth }, ['Entrar'])
+  ])
+}
+
+function openAuth() {
+  modal = { kind: 'auth' }
+  render()
+}
+
+async function cloudLogout() {
+  const r = await cloudSignOut()
+  if (r.error) console.warn(r.error)
+  authUser = null
+  modal = null
+  render()
+}
+
+function applyCloudData(data) {
+  if (data.settings) state.settings = { ...state.settings, ...data.settings }
+  state.projects = data.projects
+  state.activeProjectId = data.activeProjectId || (data.projects[0] && data.projects[0].id)
+  selectedFurnitureId = null
+  modal = null
+  persist()
+}
+
+async function syncAfterLogin() {
+  try {
+    const data = await pullState()
+    if (data && data.projects.length) {
+      applyCloudData(data)
+    } else {
+      await schedulePush(state)
+    }
+  } catch (err) {
+    console.warn('sync', err)
+  }
+  render()
+}
+
+function authModal() {
+  const email = h('input', { type: 'email', class: 'doc-input', placeholder: 'voce@marcenaria.com' })
+  const pass = h('input', { type: 'password', class: 'doc-input', placeholder: 'senha' })
+  const msgEl = h('div', { class: 'auth-msg' }, [])
+  const setMsg = (text, kind) => {
+    msgEl.textContent = text || ''
+    msgEl.className = 'auth-msg' + (kind ? ' ' + kind : '')
+  }
+  const run = async (mode) => {
+    const emailV = email.value.trim()
+    const passV = pass.value
+    if (!emailV || !passV) return setMsg('Preencha e-mail e senha.', 'err')
+    setMsg(mode === 'in' ? 'Entrando…' : 'Criando conta…')
+    const r = mode === 'in' ? await cloudSignIn(emailV, passV) : await cloudSignUp(emailV, passV)
+    if (r.error) return setMsg(r.error, 'err')
+    if (r.confirm) return setMsg('Conta criada! Confirme o e-mail de verificação e entre novamente.', 'ok')
+    modal = null
+    setMsg('Conectado. Sincronizando…', 'ok')
+    syncAfterLogin()
+  }
+  return h('div', { class: 'modal-backdrop' }, [
+    h('div', { class: 'modal auth-modal' }, [
+      h('div', { class: 'modal-head' }, [
+        h('div', {}, [
+          h('h2', {}, ['Backup na nuvem']),
+          h('span', { class: 'help' }, ['Seus orçamentos ficam salvos na sua conta (Supabase).'])
+        ]),
+        h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
+      ]),
+      h('div', { class: 'modal-body' }, [
+        h('div', { class: 'auth-box' }, [
+          field('E-mail', email),
+          field('Senha', pass),
+          msgEl,
+          h('div', { class: 'row' }, [
+            h('button', { class: 'btn primary', onClick: () => run('in') }, ['Entrar']),
+            h('button', { class: 'btn', onClick: () => run('up') }, ['Criar conta'])
+          ]),
+          h('p', { class: 'help', style: 'line-height:1.45' }, [
+            'Primeira vez: crie uma conta. No primeiro login, os dados deste navegador são enviados para a sua conta.'
+          ])
+        ])
+      ])
+    ])
+  ])
+}
+
 /* ============================== sidebar ============================== */
 
 function renderSidebar() {
@@ -371,7 +494,8 @@ function renderSidebar() {
         )
       )
     ),
-    active && active.notes ? h('div', { class: 'side-note' }, [active.notes]) : null
+    active && active.notes ? h('div', { class: 'side-note' }, [active.notes]) : null,
+    cloudConfigured() ? cloudChip() : null
   ])
 }
 
@@ -1399,7 +1523,9 @@ function render() {
     ])
   )
   if (modal) {
-    root.append(modal.kind === 'pick' ? pickerModal() : editorModal())
+    root.append(
+      modal.kind === 'pick' ? pickerModal() : modal.kind === 'auth' ? authModal() : editorModal()
+    )
   }
   if (isEdit) {
     scroller.scrollTop = scrollTop
@@ -1430,6 +1556,16 @@ function fabButton() {
 
 recalc()
 render()
+
+if (cloudConfigured()) {
+  setAuthListener((u) => {
+    authUser = u
+    if (u) syncAfterLogin()
+    else render()
+  })
+  cloudInit()
+}
+
 window.addEventListener('resize', () => {
   if (tab === 'corte' || tab === 'pecas' || tab === 'orcamento') render()
 })
