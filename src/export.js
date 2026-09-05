@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { formatMm, formatMoney, formatMeters, formatM2, GRAIN } from './store.js'
+import { formatMoney, formatMeters, formatM2, GRAIN } from './store.js'
 import { edgeMeters, pieceAreaM2 } from './nesting.js'
 
 function csvEscape(v) {
@@ -8,9 +8,12 @@ function csvEscape(v) {
   return s
 }
 
-export function exportCsv(project) {
+export function exportCsv(project, pieces) {
+  const list = pieces || project.pieces || []
   const header = [
-    'Nome',
+    'Codigo_movel',
+    'Movel',
+    'Peca',
     'Comprimento_mm',
     'Largura_mm',
     'Espessura_mm',
@@ -21,12 +24,15 @@ export function exportCsv(project) {
     'Fita_esquerda',
     'Fita_direita',
     'Area_m2',
-    'Fita_m'
+    'Fita_m',
+    'Cor'
   ]
   const rows = [header.join(';')]
-  for (const p of project.pieces) {
+  for (const p of list) {
     rows.push(
       [
+        p.furnitureCode || '',
+        p.furnitureName || '',
         p.name,
         p.length,
         p.width,
@@ -38,7 +44,8 @@ export function exportCsv(project) {
         p.edges?.left ? 'sim' : 'nao',
         p.edges?.right ? 'sim' : 'nao',
         pieceAreaM2(p).toFixed(4),
-        edgeMeters(p).toFixed(3)
+        edgeMeters(p).toFixed(3),
+        p.color || ''
       ]
         .map(csvEscape)
         .join(';')
@@ -48,14 +55,16 @@ export function exportCsv(project) {
   download(blob, slug(project.name) + '-pecas.csv')
 }
 
-export function exportPdf(project, settings, layout, summary) {
+export function exportPdf(project, settings, layout, summary, pieces) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
   const margin = 12
+  const list = pieces || project.pieces || []
 
   coverPage(doc, project, settings, summary, pageW, pageH, margin)
-  partsPage(doc, project, pageW, pageH, margin)
+  furniturePage(doc, project, summary, pageW, pageH, margin)
+  partsPage(doc, list, pageW, pageH, margin)
   layout.boards.forEach((board) => {
     doc.addPage()
     boardPage(doc, project, settings, board, pageW, pageH, margin)
@@ -78,16 +87,19 @@ function coverPage(doc, project, settings, summary, pageW, pageH, margin) {
 
   doc.setTextColor(243, 236, 227)
   doc.setFontSize(26)
-  doc.text(project.name || 'Projeto', margin + 6, 40)
+  doc.text(project.name || 'Orçamento', margin + 6, 40)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   doc.setTextColor(168, 154, 138)
   const date = new Date().toLocaleString('pt-BR')
-  doc.text(`Gerado em ${date}`, margin + 6, 50)
+  const clientLine = project.client ? `Cliente: ${project.client}` : ''
+  const phoneLine = project.phone ? ` · ${project.phone}` : ''
+  doc.text(`${clientLine}${phoneLine}`.trim() || `Gerado em ${date}`, margin + 6, 50)
+  doc.text(`Gerado em ${date}`, margin + 6, 58)
   if (project.notes) {
     const notes = doc.splitTextToSize(project.notes, pageW - margin * 2 - 20)
-    doc.text(notes, margin + 6, 60)
+    doc.text(notes, margin + 6, 68)
   }
 
   const cards = [
@@ -103,7 +115,7 @@ function coverPage(doc, project, settings, summary, pageW, pageH, margin) {
     const col = i % 3
     const row = Math.floor(i / 3)
     const x = margin + 6 + col * 90
-    const y = 90 + row * 42
+    const y = 100 + row * 42
     doc.setFillColor(37, 32, 27)
     doc.roundedRect(x, y, 82, 34, 2, 2, 'F')
     doc.setTextColor(168, 154, 138)
@@ -125,22 +137,60 @@ function coverPage(doc, project, settings, summary, pageW, pageH, margin) {
   )
 }
 
-function partsPage(doc, project, pageW, pageH, margin) {
+function furniturePage(doc, project, summary, pageW, pageH, margin) {
+  doc.addPage()
+  doc.setFillColor(250, 247, 242)
+  doc.rect(0, 0, pageW, pageH, 'F')
+  heading(doc, 'Móveis do orçamento', margin)
+
+  let y = 28
+  const list = project.furniture || []
+  list.forEach((f, i) => {
+    if (y > pageH - 22) {
+      doc.addPage()
+      doc.setFillColor(250, 247, 242)
+      doc.rect(0, 0, pageW, pageH, 'F')
+      heading(doc, 'Móveis do orçamento (cont.)', margin)
+      y = 28
+    }
+    if (i % 2 === 0) {
+      doc.setFillColor(237, 230, 218)
+      doc.rect(margin, y - 5, pageW - margin * 2, 12, 'F')
+    }
+    const rgb = hexToRgb(f.color)
+    doc.setFillColor(rgb[0], rgb[1], rgb[2])
+    doc.rect(margin + 3, y - 3, 6, 8, 'F')
+    doc.setTextColor(32, 27, 23)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text(`[${f.code}] ${f.name}`, margin + 14, y + 2)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(90, 78, 66)
+    const stats = (summary.byFurniture || []).find((x) => x.id === f.id)
+    const extra = stats ? ` · ${stats.pieceCount} peças · ${formatM2(stats.areaM2)}` : ''
+    doc.text(`${f.qty || 1} un.${extra}`, margin + 140, y + 2)
+    y += 12
+  })
+}
+
+function partsPage(doc, pieces, pageW, pageH, margin) {
   doc.addPage()
   doc.setFillColor(250, 247, 242)
   doc.rect(0, 0, pageW, pageH, 'F')
   heading(doc, 'Lista de peças', margin)
 
   const cols = [
-    { k: 'name', label: 'Peça', w: 55 },
-    { k: 'length', label: 'L (mm)', w: 22 },
-    { k: 'width', label: 'A (mm)', w: 22 },
-    { k: 'thickness', label: 'Esp.', w: 16 },
-    { k: 'qty', label: 'Qtd', w: 14 },
-    { k: 'grain', label: 'Veio', w: 48 },
-    { k: 'edges', label: 'Fita', w: 42 },
-    { k: 'area', label: 'm²', w: 22 },
-    { k: 'tape', label: 'Fita m', w: 22 }
+    { label: 'Cód.', w: 14 },
+    { label: 'Móvel', w: 42 },
+    { label: 'Peça', w: 48 },
+    { label: 'L', w: 18 },
+    { label: 'A', w: 18 },
+    { label: 'Esp.', w: 14 },
+    { label: 'Qtd', w: 12 },
+    { label: 'Veio', w: 40 },
+    { label: 'Fita', w: 28 },
+    { label: 'm²', w: 20 },
+    { label: 'Fita m', w: 18 }
   ]
 
   let x = margin
@@ -157,7 +207,7 @@ function partsPage(doc, project, pageW, pageH, margin) {
 
   y += 8
   doc.setFont('helvetica', 'normal')
-  project.pieces.forEach((p, i) => {
+  pieces.forEach((p, i) => {
     if (y > pageH - 18) {
       doc.addPage()
       doc.setFillColor(250, 247, 242)
@@ -169,22 +219,23 @@ function partsPage(doc, project, pageW, pageH, margin) {
       doc.setFillColor(237, 230, 218)
       doc.rect(margin, y, pageW - margin * 2, 8, 'F')
     }
-    const edge = edgeLabel(p.edges)
     const vals = [
+      p.furnitureCode || '',
+      (p.furnitureName || '').slice(0, 24),
       p.name,
       String(p.length),
       String(p.width),
       String(p.thickness),
       String(p.qty),
       GRAIN[p.grain] || p.grain,
-      edge,
+      edgeLabel(p.edges),
       pieceAreaM2(p).toFixed(3),
       edgeMeters(p).toFixed(2)
     ]
     x = margin
     doc.setTextColor(32, 27, 23)
     vals.forEach((v, ci) => {
-      doc.text(String(v).slice(0, 32), x + 2, y + 5.5)
+      doc.text(String(v).slice(0, 28), x + 2, y + 5.5)
       x += cols[ci].w
     })
     y += 8
@@ -205,7 +256,7 @@ function boardPage(doc, project, settings, board, pageW, pageH, margin) {
   )
 
   const boxW = pageW - margin * 2
-  const boxH = pageH - 48
+  const boxH = pageH - 56
   const scale = Math.min(boxW / board.sheetWidth, boxH / board.sheetHeight)
   const dw = board.sheetWidth * scale
   const dh = board.sheetHeight * scale
@@ -218,19 +269,8 @@ function boardPage(doc, project, settings, board, pageW, pageH, margin) {
   doc.setLineWidth(0.4)
   doc.rect(ox, oy, dw, dh)
 
-  const palette = [
-    [92, 64, 51],
-    [140, 94, 58],
-    [166, 124, 82],
-    [120, 80, 60],
-    [78, 92, 66],
-    [110, 86, 70],
-    [150, 108, 72],
-    [88, 72, 58]
-  ]
-
-  board.placements.forEach((p, i) => {
-    const c = palette[i % palette.length]
+  board.placements.forEach((p) => {
+    const c = hexToRgb(p.color || '#5c4033')
     const px = ox + (board.trim + p.x) * scale
     const py = oy + (board.trim + p.y) * scale
     const pw = p.w * scale
@@ -243,14 +283,32 @@ function boardPage(doc, project, settings, board, pageW, pageH, margin) {
     if (pw > 16 && ph > 10) {
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(Math.max(5, Math.min(8, pw / 8)))
-      doc.text(p.name, px + 1.5, py + 4, { maxWidth: pw - 3 })
+      doc.text(`[${p.furnitureCode || ''}] ${p.name}`, px + 1.5, py + 4, { maxWidth: pw - 3 })
       doc.text(`${Math.round(p.w)}×${Math.round(p.h)}`, px + 1.5, py + 8, { maxWidth: pw - 3 })
     }
   })
 
-  doc.setFontSize(8)
-  doc.setTextColor(90, 78, 66)
-  doc.text(`Kerf ${settings.kerf} mm · refilo ${settings.trim} mm`, margin, pageH - 8)
+  let lx = margin
+  const legend = uniqueFurniture(board.placements)
+  doc.setFontSize(7)
+  legend.forEach((f) => {
+    const rgb = hexToRgb(f.color)
+    doc.setFillColor(rgb[0], rgb[1], rgb[2])
+    doc.rect(lx, pageH - 12, 4, 4, 'F')
+    doc.setTextColor(90, 78, 66)
+    const label = `[${f.code}] ${f.name}`
+    doc.text(label, lx + 6, pageH - 9)
+    lx += doc.getTextWidth(label) + 14
+  })
+}
+
+function uniqueFurniture(placements) {
+  const map = {}
+  for (const p of placements) {
+    const k = p.furnitureId || p.furnitureCode || p.name
+    if (!map[k]) map[k] = { code: p.furnitureCode || '', name: p.furnitureName || p.name, color: p.color }
+  }
+  return Object.values(map)
 }
 
 function costPage(doc, project, settings, summary, pageW, pageH, margin) {
@@ -260,14 +318,20 @@ function costPage(doc, project, settings, summary, pageW, pageH, margin) {
   heading(doc, 'Orçamento', margin)
 
   const lines = [
+    ['Cliente', project.client || '—', ''],
     ['Chapas', `${summary.sheets} × ${formatMoney(Number(settings.sheetPrice || 0))}`, formatMoney(summary.sheetCost)],
-    ['Fita de borda', `${formatMeters(summary.tapeM)} × ${formatMoney(Number(settings.tapePricePerMeter || 0))}/m`, formatMoney(summary.tapeCost)],
+    ['Fita de borda', `${formatMeters(summary.tapeM)} × ${formatMoney(Number(settings.tapePricePerMeter || 0))}/m`, formatMoney(summary.tapeCost)]
+  ]
+  if (summary.labor) {
+    lines.push(['Extra / mão de obra', `${settings.laborPercent || 0}%`, formatMoney(summary.labor)])
+  }
+  lines.push(
     ['Área das peças', formatM2(summary.areaM2), ''],
     ['Área das chapas', formatM2(summary.sheetAreaM2), ''],
     ['Sobra (área útil)', formatM2(summary.wasteM2), ''],
     ['Aproveitamento', `${summary.efficiency.toFixed(1)}%`, ''],
     ['Peças não posicionadas', String(summary.unplaced), '']
-  ]
+  )
 
   let y = 32
   lines.forEach((row, i) => {
@@ -279,7 +343,7 @@ function costPage(doc, project, settings, summary, pageW, pageH, margin) {
     doc.setFontSize(11)
     doc.text(row[0], margin + 4, y)
     doc.setTextColor(90, 78, 66)
-    doc.text(row[1], margin + 90, y)
+    doc.text(String(row[1]), margin + 90, y)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(32, 27, 23)
     if (row[2]) doc.text(row[2], pageW - margin - 4, y, { align: 'right' })
@@ -312,6 +376,14 @@ function edgeLabel(edges) {
   if (edges.left) tags.push('E')
   if (edges.right) tags.push('D')
   return tags.length ? tags.join(' ') : '—'
+}
+
+function hexToRgb(hex) {
+  const h = String(hex || '#5c4033').replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const n = parseInt(full, 16)
+  if (!Number.isFinite(n)) return [92, 64, 51]
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
 function slug(name) {

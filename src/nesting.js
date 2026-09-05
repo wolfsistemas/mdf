@@ -54,31 +54,15 @@ function occupy(size, kerf, remaining) {
   return Math.min(remaining, size + kerf)
 }
 
-function placeGuillotine(board, item, kerf) {
+function computeGuillotine(board, item, kerf) {
   const orients = orientations(item)
+  let best = null
   for (const strip of board.strips) {
     for (const o of orients) {
       if (o.h <= strip.height + 1e-6 && o.w <= strip.remaining + 1e-6) {
-        const x = board.W - strip.remaining
-        const y = strip.y
         const used = occupy(o.w, kerf, strip.remaining)
-        strip.usedW += used
-        strip.remaining -= used
-        board.placements.push({
-          uid: item.uid,
-          pieceId: item.id,
-          name: item.name,
-          instance: item.instance,
-          qty: item.qty,
-          x,
-          y,
-          w: o.w,
-          h: o.h,
-          rotated: o.rotated,
-          grain: item.grain,
-          thickness: item.thickness
-        })
-        return true
+        const cost = strip.remaining - used
+        if (!best || cost < best.cost) best = { kind: 'strip', strip, o, cost }
       }
     }
   }
@@ -88,33 +72,40 @@ function placeGuillotine(board, item, kerf) {
   const ranked = [...orients].sort((a, b) => a.h - b.h)
   for (const o of ranked) {
     if (o.h <= remainH + 1e-6 && o.w <= board.W + 1e-6) {
-      const stripH = occupy(o.h, kerf, remainH)
-      const usedW = occupy(o.w, kerf, board.W)
-      const strip = {
-        y: usedH,
-        height: stripH,
-        usedW,
-        remaining: board.W - usedW
-      }
-      board.strips.push(strip)
-      board.placements.push({
-        uid: item.uid,
-        pieceId: item.id,
-        name: item.name,
-        instance: item.instance,
-        qty: item.qty,
-        x: 0,
-        y: strip.y,
-        w: o.w,
-        h: o.h,
-        rotated: o.rotated,
-        grain: item.grain,
-        thickness: item.thickness
-      })
-      return true
+      const used = occupy(o.h, kerf, remainH)
+      const cost = remainH - used
+      if (!best || cost < best.cost) best = { kind: 'row', o, cost }
+      break
     }
   }
-  return false
+  return best
+}
+
+function placeGuillotine(board, item, kerf) {
+  const best = computeGuillotine(board, item, kerf)
+  if (!best) return false
+  if (best.kind === 'strip') {
+    const x = board.W - best.strip.remaining
+    const y = best.strip.y
+    const used = occupy(best.o.w, kerf, best.strip.remaining)
+    best.strip.usedW += used
+    best.strip.remaining -= used
+    board.placements.push(placeRecord(item, best.o, x, y))
+    return true
+  }
+  const usedH = board.strips.reduce((s, st) => s + st.height, 0)
+  const remainH = board.H - usedH
+  const stripH = occupy(best.o.h, kerf, remainH)
+  const usedW = occupy(best.o.w, kerf, board.W)
+  const strip = {
+    y: usedH,
+    height: stripH,
+    usedW,
+    remaining: board.W - usedW
+  }
+  board.strips.push(strip)
+  board.placements.push(placeRecord(item, best.o, 0, strip.y))
+  return true
 }
 
 function splitFree(free, used) {
@@ -200,21 +191,29 @@ function placeFree(board, item, kerf) {
   if (!best) return false
   const { f, o, ow, oh } = best
   board.free = splitFree(board.free, { x: f.x, y: f.y, w: ow, h: oh })
-  board.placements.push({
+  board.placements.push(placeRecord(item, o, f.x, f.y))
+  return true
+}
+
+function placeRecord(item, o, x, y) {
+  return {
     uid: item.uid,
     pieceId: item.id,
     name: item.name,
     instance: item.instance,
     qty: item.qty,
-    x: f.x,
-    y: f.y,
+    x,
+    y,
     w: o.w,
     h: o.h,
     rotated: o.rotated,
     grain: item.grain,
-    thickness: item.thickness
-  })
-  return true
+    thickness: item.thickness,
+    furnitureId: item.furnitureId || '',
+    furnitureName: item.furnitureName || '',
+    furnitureCode: item.furnitureCode || '',
+    color: item.color || '#5c4033'
+  }
 }
 
 function newBoard(W, H, mode, thickness) {
@@ -259,10 +258,24 @@ export function nest(pieces, settings) {
     }
 
     let placed = false
-    for (const board of boards) {
-      if (board.thickness !== item.thickness) continue
-      placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
-      if (placed) break
+    if (mode === 'free') {
+      for (const board of boards) {
+        if (board.thickness !== item.thickness) continue
+        placed = placeFree(board, item, kerf)
+        if (placed) break
+      }
+    } else {
+      let bestBoard = null
+      let bestCost = Infinity
+      for (const board of boards) {
+        if (board.thickness !== item.thickness) continue
+        const c = computeGuillotine(board, item, kerf)
+        if (c && c.cost < bestCost) {
+          bestCost = c.cost
+          bestBoard = board
+        }
+      }
+      if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
     }
     if (!placed) {
       const board = newBoard(W, H, mode, item.thickness)
@@ -311,27 +324,48 @@ export function nest(pieces, settings) {
   }
 }
 
-export function summarize(project, settings, layout) {
-  const pieces = project.pieces || []
-  const areaM2 = pieces.reduce((s, p) => s + pieceAreaM2(p), 0)
-  const tapeM = pieces.reduce((s, p) => s + edgeMeters(p), 0)
+export function summarize(project, settings, layout, pieces) {
+  const list = pieces || project.pieces || []
+  const areaM2 = list.reduce((s, p) => s + pieceAreaM2(p), 0)
+  const tapeM = list.reduce((s, p) => s + edgeMeters(p), 0)
   const sheets = layout.sheetsNeeded
   const sheetCost = sheets * Number(settings.sheetPrice || 0)
   const tapeCost = tapeM * Number(settings.tapePricePerMeter || 0)
-  const total = sheetCost + tapeCost
+  const labor = (sheetCost + tapeCost) * (Number(settings.laborPercent || 0) / 100)
+  const total = sheetCost + tapeCost + labor
   const sheetAreaM2 = (Number(settings.sheetWidth) * Number(settings.sheetHeight) * sheets) / 1e6
+  const byFurniture = {}
+  for (const p of list) {
+    const key = p.furnitureId || '_avulso'
+    if (!byFurniture[key]) {
+      byFurniture[key] = {
+        id: p.furnitureId,
+        name: p.furnitureName || 'Peças',
+        code: p.furnitureCode || '',
+        color: p.color || '#5c4033',
+        pieceCount: 0,
+        areaM2: 0,
+        tapeM: 0
+      }
+    }
+    byFurniture[key].pieceCount += Math.max(0, Number(p.qty) || 0)
+    byFurniture[key].areaM2 += pieceAreaM2(p)
+    byFurniture[key].tapeM += edgeMeters(p)
+  }
   return {
-    pieceCount: pieces.reduce((s, p) => s + Math.max(0, Number(p.qty) || 0), 0),
-    types: pieces.length,
+    pieceCount: list.reduce((s, p) => s + Math.max(0, Number(p.qty) || 0), 0),
+    types: list.length,
     areaM2,
     tapeM,
     sheets,
     sheetCost,
     tapeCost,
+    labor,
     total,
     sheetAreaM2,
     efficiency: layout.efficiency,
     wasteM2: layout.wasteArea / 1e6,
-    unplaced: layout.unplaced.length
+    unplaced: layout.unplaced.length,
+    byFurniture: Object.values(byFurniture)
   }
 }

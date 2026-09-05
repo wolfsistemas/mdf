@@ -1,4 +1,6 @@
-const KEY = 'mdf-atelier-v1'
+import { createFurniture, modelByTypeVariant } from './catalog.js'
+
+export const KEY = 'mdf-atelier-v2'
 
 export const GRAIN = {
   livre: 'Livre (pode girar)',
@@ -22,36 +24,72 @@ export function defaultSettings() {
     currency: 'BRL',
     sheetWidth: 2750,
     sheetHeight: 1830,
-    sheetThickness: 18,
+    sheetThickness: 15,
     sheetPrice: 180,
-    sheetName: 'MDF 18 mm 2750x1830',
+    sheetName: 'MDF 15 mm 2750x1830',
     tapePricePerMeter: 2.5,
-    tapeName: 'Fita PVC 22 mm'
+    tapeName: 'Fita PVC 22 mm',
+    laborPercent: 0,
+    defaultMargin: 100,
+    shopName: 'MDF Atelier',
+    shopPhone: ''
   }
 }
 
-function defaultState() {
-  const settings = defaultSettings()
-  const projectId = uid()
+function sampleProject() {
+  const armario = createFurniture(modelByTypeVariant('armario', '3-portas'), [])
+  armario.name = 'Armário escritório'
+  armario.params = {
+    ...armario.params,
+    width: 1200,
+    height: 1800,
+    depth: 500,
+    doors: 3,
+    shelves: 4,
+    hasBack: 1,
+    carcassT: 15,
+    backT: 15,
+    doorT: 15
+  }
+  const mesa = createFurniture(modelByTypeVariant('mesa', 'gaveteiro'), [armario])
+  mesa.name = 'Mesa com gaveteiro'
+  mesa.params = {
+    ...mesa.params,
+    width: 1400,
+    depth: 600,
+    height: 750,
+    thickness: 15,
+    modesty: 1,
+    saiaH: 120,
+    gavetas: 3,
+    gavH: 170,
+    drawerBase: 'alto',
+    baseH: 150,
+    pedW: 0,
+    shelf: 0
+  }
+  const closet = createFurniture(modelByTypeVariant('guarda-roupa', 'closet'), [armario, mesa])
+  closet.name = 'Closet quarto'
+  closet.params = {
+    ...closet.params,
+    width: 1600,
+    height: 2100,
+    depth: 580,
+    doors: 0,
+    shelves: 2,
+    divisors: 1,
+    cabideiro: 1,
+    hasBack: 1
+  }
   return {
-    settings,
-    activeProjectId: projectId,
-    projects: [
-      {
-        id: projectId,
-        name: 'Armário 800 — exemplo',
-        notes: 'Módulo de 800 mm. Edite ou crie um projeto novo.',
-        createdAt: Date.now(),
-        pieces: [
-          piece('Lateral', 720, 500, 18, 2, 'comprimento', { front: true, back: true, left: false, right: true }),
-          piece('Base', 764, 500, 18, 1, 'comprimento', { front: true, back: false, left: true, right: true }),
-          piece('Tampo', 764, 500, 18, 1, 'comprimento', { front: true, back: false, left: true, right: true }),
-          piece('Prateleira', 764, 480, 18, 2, 'comprimento', { front: true, back: false, left: false, right: false }),
-          piece('Porta', 715, 397, 18, 2, 'comprimento', { front: true, back: true, left: true, right: true }),
-          piece('Fundo', 764, 704, 15, 1, 'livre', { front: false, back: false, left: false, right: false })
-        ]
-      }
-    ]
+    id: uid(),
+    name: 'Escritório e quarto — exemplo',
+    client: 'Fulano da Silva',
+    phone: '',
+    notes: 'Exemplo: armário 3 portas, mesa com gaveteiro e closet. Edite as medidas ou adicione móveis do catálogo.',
+    createdAt: Date.now(),
+    billingBasis: 'used',
+    furniture: [armario, mesa, closet]
   }
 }
 
@@ -70,7 +108,7 @@ export function piece(name, length, width, thickness, qty, grain, edges) {
 }
 
 export function blankPiece() {
-  return piece('Nova peça', 600, 400, 18, 1, 'livre', {
+  return piece('Nova peça', 600, 400, 15, 1, 'livre', {
     front: false,
     back: false,
     left: false,
@@ -81,23 +119,73 @@ export function blankPiece() {
 export function blankProject() {
   return {
     id: uid(),
-    name: 'Novo projeto',
+    name: 'Novo orçamento',
+    client: '',
+    phone: '',
     notes: '',
     createdAt: Date.now(),
-    pieces: []
+    billingBasis: 'used',
+    furniture: []
+  }
+}
+
+function migrateProject(p) {
+  if (p.furniture) {
+    return {
+      ...p,
+      client: p.client || '',
+      phone: p.phone || '',
+      billingBasis: p.billingBasis === 'rateio' ? 'rateio' : 'used',
+      furniture: p.furniture
+    }
+  }
+  const avulso = createFurniture('avulso', [])
+  avulso.name = p.name || 'Peças avulsas'
+  avulso.extraPieces = (p.pieces || []).map((x) => ({
+    ...x,
+    id: x.id || uid(),
+    edges: { ...(x.edges || {}) }
+  }))
+  return {
+    id: p.id || uid(),
+    name: p.name || 'Projeto',
+    client: p.client || '',
+    phone: p.phone || '',
+    notes: p.notes || '',
+    createdAt: p.createdAt || Date.now(),
+    billingBasis: p.billingBasis === 'rateio' ? 'rateio' : 'used',
+    furniture: [avulso]
   }
 }
 
 export function loadState() {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return defaultState()
+    const v2 = localStorage.getItem(KEY)
+    const v1 = localStorage.getItem('mdf-atelier-v1')
+    const raw = v2 || v1
+    if (!raw) {
+      const project = sampleProject()
+      return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
+    }
     const data = JSON.parse(raw)
-    if (!data.projects?.length) return defaultState()
+    if (!data.projects?.length) {
+      const project = sampleProject()
+      return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
+    }
     data.settings = { ...defaultSettings(), ...data.settings }
+    data.projects = data.projects.map(migrateProject)
+    if (!v2 && v1) {
+      const sample = sampleProject()
+      data.projects.unshift(sample)
+      data.activeProjectId = sample.id
+    }
+    if (!data.projects.some((p) => p.id === data.activeProjectId)) {
+      data.activeProjectId = data.projects[0].id
+    }
     return data
   } catch {
-    return defaultState()
+    const project = sampleProject()
+    return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
   }
 }
 
