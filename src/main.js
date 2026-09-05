@@ -54,6 +54,8 @@ let modal = null
 let editorLView = 'planta'
 let editorStep = 0
 let drawerOpen = false
+let listFocusId = null
+let printFull = false
 let authUser = null
 let syncTimer = null
 const groupOpen = {}
@@ -99,6 +101,7 @@ function setActive(id) {
   selectedFurnitureId = (project()?.furniture || [])[0]?.id || null
   modal = null
   drawerOpen = false
+  listFocusId = null
   persist()
 }
 
@@ -109,6 +112,7 @@ function addProject() {
   state.activeProjectId = p.id
   selectedFurnitureId = null
   drawerOpen = false
+  listFocusId = null
   persist()
 }
 
@@ -126,6 +130,7 @@ function duplicateProject() {
   state.projects.unshift(copy)
   state.activeProjectId = copy.id
   drawerOpen = false
+  listFocusId = null
   persist()
 }
 
@@ -134,6 +139,7 @@ function removeProject(id) {
   state.projects = state.projects.filter((p) => p.id !== id)
   if (state.activeProjectId === id) state.activeProjectId = state.projects[0].id
   drawerOpen = false
+  listFocusId = null
   persist()
 }
 
@@ -171,6 +177,7 @@ function removeFurniture(id) {
   const p = project()
   p.furniture = (p.furniture || []).filter((f) => f.id !== id)
   if (selectedFurnitureId === id) selectedFurnitureId = p.furniture[0]?.id || null
+  if (listFocusId === id) listFocusId = null
   modal = null
   persist()
 }
@@ -382,6 +389,11 @@ function gotoStep(i) {
   editorStep = Math.max(0, Math.min(EDITOR_STEPS.length - 1, i))
   refresh()
 }
+function selectTab(id) {
+  tab = id
+  if (id === 'orcamento') listFocusId = null
+  refresh()
+}
 function mobileNav() {
   return h(
     'nav',
@@ -389,7 +401,7 @@ function mobileNav() {
     tabsDef().map(([id, label]) =>
       h(
         'button',
-        { class: 'mnav' + (tab === id ? ' active' : ''), onClick: () => { tab = id; refresh() } },
+        { class: 'mnav' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) },
         [label]
       )
     )
@@ -666,6 +678,81 @@ function tabOrcamento() {
     )
   }
   return h('div', { class: 'budget-doc' }, pages)
+}
+
+/* ============ orçamento no smartphone: lista de itens × detalhe ============ */
+
+function mobileOpenItem(id) {
+  listFocusId = id
+  refresh()
+}
+function mobileBackList() {
+  listFocusId = null
+  refresh()
+}
+
+function itemDims(item) {
+  const p = item.params || {}
+  const w = numP(p, 'width') || numP(p, 'length')
+  const d = numP(p, 'depth')
+  const h = numP(p, 'height')
+  const parts = [w, d, h].filter((v) => v > 0).map((v) => `${Math.round(v)} mm`)
+  return parts.join(' × ')
+}
+
+function mobileOrcamento() {
+  const p = project()
+  const items = furnitureList()
+  if (!items.length) listFocusId = null
+  const focus = listFocusId ? items.find((f) => f.id === listFocusId) || null : null
+  if (focus) {
+    return h('div', { class: 'mobile-detail' }, [
+      h('div', { class: 'detail-bar' }, [
+        h('button', { class: 'btn', onClick: mobileBackList }, ['‹ Todos os itens']),
+        h('span', { class: 'help' }, [formatMoney(saleCalc(focus).lineTotal)]),
+        h('button', { class: 'btn primary', title: 'Imprimir ou salvar o orçamento completo em PDF', onClick: printBudget }, ['Imprimir / PDF'])
+      ]),
+      h('div', { class: 'budget-doc' }, [itemPage(focus)])
+    ])
+  }
+  const t = projectSaleTotals()
+  return h('div', { class: 'mobile-list' }, [
+    items.length
+      ? h('div', { class: 'list-summary' }, [
+          h('div', { class: 'ls-stats' }, [
+            h('div', {}, [h('label', {}, ['ITENS']), h('strong', {}, [String(t.count)])]),
+            h('div', {}, [h('label', {}, ['UNIDADES']), h('strong', {}, [String(t.units)])])
+          ]),
+          h('div', { class: 'ls-total' }, [h('label', {}, ['TOTAL']), h('strong', { class: 'accent' }, [formatMoney(t.sale)])])
+        ])
+      : null,
+    items.length
+      ? h(
+          'div',
+          { class: 'item-list' },
+          items.map((f) => {
+            const s = saleCalc(f)
+            const dims = itemDims(f)
+            return h('button', { class: 'item-row', onClick: () => mobileOpenItem(f.id) }, [
+              h('span', { class: 'row-swatch', style: `background:${f.color}` }),
+              h('span', { class: 'row-main' }, [
+                h('strong', {}, [f.name]),
+                h('span', {}, [dims ? dims : `${s.pieceCount} peça(s)`, ` · ${s.qty} ${s.qty === 1 ? 'unidade' : 'unidades'}`])
+              ]),
+              h('span', { class: 'row-price' }, [h('strong', { class: 'accent' }, [formatMoney(s.lineTotal)])]),
+              h('span', { class: 'row-chev' }, ['›'])
+            ])
+          })
+        )
+      : h('div', { class: 'budget-empty' }, [
+          h('h3', {}, ['Nenhum móvel neste orçamento']),
+          h('p', {}, ['Toque em "+ Adicionar móvel" para montar o primeiro item do cliente.']),
+          h('div', { style: 'margin-top:14px' }, [h('button', { class: 'btn primary', onClick: openModalNew }, ['+ Adicionar móvel'])])
+        ]),
+    items.length
+      ? h('p', { class: 'help list-tip' }, ['Toque em um item para ver o desenho e a ficha completa. Para enviar tudo de uma vez, use "Imprimir / PDF" no topo.'])
+      : null
+  ])
 }
 
 function coverPage(p) {
@@ -1711,13 +1798,38 @@ function topActions(p) {
   const btns = [h('button', { class: 'btn', title: 'Baixar CSV com todas as peças do projeto', onClick: () => exportCsv(p, piecesCache) }, ['CSV peças'])]
   if (tab === 'orcamento') {
     btns.unshift(
-      h('button', { class: 'btn primary', title: 'Imprimir ou salvar em PDF apenas o orçamento do cliente', onClick: () => window.print() }, ['Imprimir / PDF']),
+      h('button', { class: 'btn primary', title: 'Imprimir ou salvar em PDF o orçamento do cliente', onClick: printBudget }, ['Imprimir / PDF']),
       h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano'])
     )
   } else if (tab === 'corte') {
     btns.unshift(h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano']))
   }
   return btns
+}
+
+function printBudget() {
+  if (!isMobileNow() || printFull) {
+    window.print()
+    return
+  }
+  printFull = true
+  render()
+  requestAnimationFrame(() => {
+    window.print()
+    const done = () => {
+      window.removeEventListener('afterprint', done)
+      printFull = false
+      render()
+    }
+    window.addEventListener('afterprint', done)
+    setTimeout(() => {
+      window.removeEventListener('afterprint', done)
+      if (printFull) {
+        printFull = false
+        render()
+      }
+    }, 6000)
+  })
 }
 
 function render() {
@@ -1733,20 +1845,22 @@ function render() {
   const modalScrollTop = modalBodyEl ? modalBodyEl.scrollTop : 0
   root.innerHTML = ''
   const p = project()
+  const mobile = isMobileNow()
   if (!selectedFurnitureId && furnitureList()[0]) selectedFurnitureId = furnitureList()[0].id
 
   const body =
-    tab === 'orcamento'
-      ? tabOrcamento()
-      : tab === 'custos'
-        ? tabCustos()
-        : tab === 'pecas'
-          ? tabPecas()
-          : tab === 'corte'
-            ? tabCorte()
-            : tabConfig()
+    mobile && tab === 'orcamento' && !printFull
+      ? mobileOrcamento()
+      : tab === 'orcamento'
+        ? tabOrcamento()
+        : tab === 'custos'
+          ? tabCustos()
+          : tab === 'pecas'
+            ? tabPecas()
+            : tab === 'corte'
+              ? tabCorte()
+              : tabConfig()
 
-  const mobile = isMobileNow()
   root.append(
     h('div', { class: 'app' }, [
       mobile
@@ -1761,11 +1875,7 @@ function render() {
             h('span', {}, [`${(p.furniture || []).length} móvel(is) · ${(p.client && p.client) || 'sem cliente'} · `, new Date(p.createdAt).toLocaleDateString('pt-BR')])
           ]),
           h('div', { class: 'tabs', role: 'tablist' }, tabsDef().map(([id, label]) =>
-            h(
-              'button',
-              { class: 'tab' + (tab === id ? ' active' : ''), onClick: () => { tab = id; refresh() } },
-              [label]
-            )
+            h('button', { class: 'tab' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) }, [label])
           )),
           h('div', { class: 'actions' }, topActions(p))
         ]),
