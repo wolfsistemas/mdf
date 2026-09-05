@@ -532,7 +532,7 @@ function totalsCard(t, p) {
 
 function docLogoMark(cls) {
   const mark = h('div', { class: 'mark' }, ['MDF ATELIER'])
-  const img = h('img', { class: 'logo-img', src: '/logo.png', alt: '' })
+  const img = h('img', { class: 'logo-img', src: import.meta.env.BASE_URL + 'logo.png', alt: '' })
   img.style.display = 'none'
   img.addEventListener('load', () => {
     img.style.display = 'block'

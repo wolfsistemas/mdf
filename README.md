@@ -53,3 +53,42 @@ Tudo em milimetros. Preco da chapa e da fita em reais, editavel em Config, junto
 Coloque o arquivo `public/logo.png` para o documento de orcamento mostrar a logo
 no cabecalho e no rodape (veja `public/README.md`). Enquanto o arquivo nao existir,
 o documento usa o monograma de texto e a impressao continua normal.
+
+## Publicar no GitHub Pages (teste)
+
+Este repositorio fica em `https://github.com/wolfsistemas/mdf`, entao o app e
+servido sob o caminho `/mdf/`. O build para Pages usa esse caminho:
+
+```bash
+npm run build:pages
+```
+
+O deploy e feito pelo workflow `.github/workflows/gh-pages.yml` (roda no push
+para `main` ou manualmente na aba Actions). Primeira vez, no GitHub:
+
+1. Repositorio -> **Settings -> Pages**: em "Build and deployment", escolha
+   **Source: GitHub Actions** (o workflow cuida do resto).
+2. Suba o codigo para `main` (merge do branch de trabalho via Pull Request).
+3. Apos o workflow concluir, o app aparece em
+   `https://wolfsistemas.github.io/mdf/`.
+
+Importante: nesse modo os dados continuam no **localStorage** do navegador
+(dados por maquina, nada vai para um servidor).
+
+## Nuvem com Supabase (para vender / varios clientes)
+
+Schema pronto em `supabase/schema.sql` (tabelas `profiles` e `projects` +
+Row Level Security). Para criar no seu projeto:
+
+1. Crie o projeto em https://supabase.com (free).
+2. Abra **SQL Editor**, cole o conteudo inteiro de `supabase/schema.sql` e
+   execute (e seguro rodar de novo).
+3. Em **Project Settings -> API** copie a `URL` e a `anon key`.
+4. Copie `.env.example` para `.env` e preencha as duas chaves
+   (o `.env` nao vai para o git).
+
+O schema cria automaticamente um perfil para cada usuario novo (login via
+Supabase Auth, a ser ligado no app). Cada usuario ve apenas os proprios
+orcamentos. `settings` da oficina ficam no perfil; cada orcamento vira uma
+linha em `projects` com os moveis em `furniture` (jsonb), espelhando o que o
+app hoje guarda no localStorage.
