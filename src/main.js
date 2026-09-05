@@ -1559,12 +1559,12 @@ let appStarted = false
 let currentScreen = null
 
 function showScreen() {
-  const inApp = location.hash.startsWith('#/app')
-  if (inApp === (currentScreen === 'app')) return
+  const desired = location.hash.startsWith('#/app') ? 'app' : 'landing'
+  if (currentScreen === desired) return
+  currentScreen = desired
   const root = document.getElementById('app')
   document.body.style.overflow = ''
-  if (inApp) {
-    currentScreen = 'app'
+  if (desired === 'app') {
     document.body.classList.remove('landing-mode')
     if (!appStarted) {
       appStarted = true
@@ -1583,7 +1583,6 @@ function showScreen() {
       render()
     }
   } else {
-    currentScreen = 'landing'
     document.body.classList.add('landing-mode')
     root.innerHTML = ''
     root.insertAdjacentHTML('afterbegin', landingHTML())
