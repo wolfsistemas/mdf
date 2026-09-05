@@ -109,6 +109,26 @@ Depois de rodar o schema, use o botao **Backup na nuvem** (barra lateral) do
 app para criar a conta e sincronizar. Primeiro login com a conta vazia envia os
 dados do navegador para a nuvem; nas proximas vezes a nuvem e a fonte dos dados.
 
+### Planos (limite Gratis x Pro)
+
+Contas novas entram no **plano Gratis**: ate 3 orcamentos ativos. Ao tentar
+criar mais, o app abre a tela de upgrade. `src/billing.js` concentra a
+configuracao comercial:
+
+- `SALE.url` = link de assinatura (Mercado Pago/Stripe) quando existir.
+- `SALE.whatsapp` = WhatsApp comercial usado enquanto nao houver `url`.
+- `FREE_PROJECT_LIMIT` = limite do Gratis (padrao 3).
+
+Sem login (modo local/demo) nao ha limite. Para liberar uma conta para Pro,
+rode no SQL Editor (ajuste o id):
+
+```sql
+select id, email from auth.users;
+update public.profiles
+set settings = settings || '{"plan":"pro"}'::jsonb
+where id = '<ID-DO-USUARIO>';
+```
+
 Para o build do GitHub Pages incluir a nuvem, adicione os repositorios secrets
 `SUPABASE_URL` e `SUPABASE_ANON_KEY` (Settings -> Secrets and variables) — sem
 eles o Pages roda apenas no modo local.

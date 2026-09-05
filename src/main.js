@@ -35,6 +35,7 @@ import {
   schedulePush
 } from './cloud.js'
 import { landingHTML } from './landing.js'
+import { FREE_PROJECT_LIMIT, planLabel, isLimitedPlan, upgradeHref } from './billing.js'
 import qrcode from 'qrcode-generator'
 qrcode.stringToBytes =
   typeof TextEncoder !== 'undefined'
@@ -99,6 +100,7 @@ function setActive(id) {
 }
 
 function addProject() {
+  if (!guardProjectSlots()) return
   const p = blankProject()
   state.projects.unshift(p)
   state.activeProjectId = p.id
@@ -107,6 +109,7 @@ function addProject() {
 }
 
 function duplicateProject() {
+  if (!guardProjectSlots()) return
   const p = project()
   const copy = structuredClone(p)
   copy.id = blankProject().id
@@ -346,15 +349,42 @@ function confirmDialog(message) {
 
 /* ============================== nuvem (Supabase) ============================== */
 
+function currentPlan() {
+  return (state.settings && state.settings.plan) || 'gratis'
+}
+function planLimited() {
+  return Boolean(authUser) && isLimitedPlan(currentPlan())
+}
+function guardProjectSlots() {
+  if (!planLimited()) return true
+  if (state.projects.length >= FREE_PROJECT_LIMIT) {
+    openUpgrade(
+      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro os orçamentos são ilimitados.`
+    )
+    return false
+  }
+  return true
+}
+function openUpgrade(message) {
+  modal = { kind: 'upgrade', msg: message || '' }
+  render()
+}
+
 function cloudChip() {
   const cls = 'cloud-chip' + (authUser ? ' on' : '')
   if (authUser) {
+    const plan = currentPlan()
+    const buttons = []
+    if (isLimitedPlan(plan)) {
+      buttons.push(h('button', { class: 'btn small primary', onClick: () => openUpgrade('Faça upgrade para criar quantos orçamentos quiser.') }, ['Fazer upgrade']))
+    }
+    buttons.push(h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair']))
     return h('div', { class: cls }, [
       h('div', { class: 'cloud-txt' }, [
-        h('strong', {}, ['Nuvem ativa']),
+        h('strong', {}, [`Nuvem ativa · Plano ${planLabel(plan)}`]),
         h('span', {}, [authUser.email || ''])
       ]),
-      h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair'])
+      buttons
     ])
   }
   return h('div', { class: cls }, [
@@ -442,6 +472,49 @@ function authModal() {
           ]),
           h('p', { class: 'help', style: 'line-height:1.45' }, [
             'Primeira vez: crie uma conta. No primeiro login, os dados deste navegador são enviados para a sua conta.'
+          ])
+        ])
+      ])
+    ])
+  ])
+}
+
+function upgradeModal() {
+  const m = modal
+  return h('div', { class: 'modal-backdrop' }, [
+    h('div', { class: 'modal auth-modal' }, [
+      h('div', { class: 'modal-head' }, [
+        h('div', {}, [
+          h('h2', {}, ['Plano Pro do MDF Atelier']),
+          h('span', { class: 'help' }, ['Orçamentos ilimitados para a sua marcenaria.'])
+        ]),
+        h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
+      ]),
+      h('div', { class: 'modal-body' }, [
+        h('div', { class: 'auth-box' }, [
+          h('p', { class: 'help', style: 'line-height:1.5' }, [m.msg || '']),
+          h('div', { class: 'auth-plans' }, [
+            h('div', { class: 'auth-plan hot' }, [
+              h('strong', {}, ['Pro']),
+              h('span', {}, ['R$ 49/mês'])
+            ]),
+            h('div', { class: 'auth-plan' }, [
+              h('strong', {}, ['Premium']),
+              h('span', {}, ['R$ 99/mês'])
+            ])
+          ]),
+          h('ul', { class: 'help', style: 'line-height:1.7;padding-left:16px;margin:0' }, [
+            h('li', {}, ['Orçamentos ilimitados']),
+            h('li', {}, ['Sua logo e seu WhatsApp no documento']),
+            h('li', {}, ['Backup na nuvem e suporte'])
+          ]),
+          h('div', { class: 'row' }, [
+            h(
+              'a',
+              { class: 'btn primary', href: upgradeHref('Quero assinar o plano Pro do MDF Atelier.'), target: '_blank', rel: 'noopener' },
+              ['Assinar o Pro']
+            ),
+            h('button', { class: 'btn', onClick: () => { modal = null; render() } }, ['Agora não'])
           ])
         ])
       ])
@@ -1525,7 +1598,13 @@ function render() {
   )
   if (modal) {
     root.append(
-      modal.kind === 'pick' ? pickerModal() : modal.kind === 'auth' ? authModal() : editorModal()
+      modal.kind === 'pick'
+        ? pickerModal()
+        : modal.kind === 'auth'
+          ? authModal()
+          : modal.kind === 'upgrade'
+            ? upgradeModal()
+            : editorModal()
     )
   }
   if (isEdit) {

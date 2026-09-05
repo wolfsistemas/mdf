@@ -939,6 +939,40 @@ input[type="color"] {
   color: var(--ok);
 }
 
+.auth-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-plan {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+}
+
+.auth-plan.hot {
+  border-color: var(--gold);
+}
+
+.auth-plan strong {
+  font-size: 15px;
+}
+
+.auth-plan span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-box a.btn {
+  text-decoration: none;
+  cursor: pointer;
+}
+
 /* ---------- Topbar ---------- */
 
 .topbar {
