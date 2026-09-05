@@ -2251,16 +2251,24 @@ td strong.gold {
 
   .sidebar {
     position: fixed;
-    inset: 0 auto 0 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
     z-index: 55;
     width: min(320px, 86vw);
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
     transform: translateX(-105%);
     transition: transform 0.22s ease;
     border-right: 1px solid var(--line);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .sidebar.open {
-    transform: translateX(0);
+    transform: none;
     box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
   }
 
@@ -2281,6 +2289,8 @@ td strong.gold {
   .topbar {
     gap: 8px;
     padding: 10px 12px;
+    flex-direction: row;
+    align-items: center;
   }
 
   .menu-btn {
