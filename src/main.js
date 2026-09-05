@@ -34,6 +34,7 @@ import {
   pullState,
   schedulePush
 } from './cloud.js'
+import { landingHTML } from './landing.js'
 import qrcode from 'qrcode-generator'
 qrcode.stringToBytes =
   typeof TextEncoder !== 'undefined'
@@ -1554,18 +1555,44 @@ function fabButton() {
   return h('button', { class: 'fab', onClick: openModalNew, title: 'Adicionar móvel ao orçamento' }, ['+'])
 }
 
-recalc()
-render()
+let appStarted = false
+let currentScreen = null
 
-if (cloudConfigured()) {
-  setAuthListener((u) => {
-    authUser = u
-    if (u) syncAfterLogin()
-    else render()
-  })
-  cloudInit()
+function showScreen() {
+  const inApp = location.hash.startsWith('#/app')
+  if (inApp === (currentScreen === 'app')) return
+  const root = document.getElementById('app')
+  document.body.style.overflow = ''
+  if (inApp) {
+    currentScreen = 'app'
+    document.body.classList.remove('landing-mode')
+    if (!appStarted) {
+      appStarted = true
+      recalc()
+      render()
+      if (cloudConfigured()) {
+        setAuthListener((u) => {
+          authUser = u
+          if (u) syncAfterLogin()
+          else render()
+        })
+        cloudInit()
+      }
+    } else {
+      recalc()
+      render()
+    }
+  } else {
+    currentScreen = 'landing'
+    document.body.classList.add('landing-mode')
+    root.innerHTML = ''
+    root.insertAdjacentHTML('afterbegin', landingHTML())
+  }
 }
 
 window.addEventListener('resize', () => {
-  if (tab === 'corte' || tab === 'pecas' || tab === 'orcamento') render()
+  if (currentScreen === 'app' && (tab === 'corte' || tab === 'pecas' || tab === 'orcamento')) render()
 })
+window.addEventListener('hashchange', showScreen)
+
+showScreen()

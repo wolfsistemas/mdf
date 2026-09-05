@@ -77,6 +77,16 @@ para `main` ou manualmente na aba Actions). Primeira vez, no GitHub:
 Importante: nesse modo os dados continuam no **localStorage** do navegador
 (dados por maquina, nada vai para um servidor).
 
+## Landing page (site de vendas)
+
+A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, planos e FAQ; o
+app fica em `/mdf/#/app` (botao "Abrir o app" / "Testar gratis").
+
+Textos, precos e planos ficam em `src/landing.js` e o visual em
+`src/landing.css`. Para o CTA dos planos Pro/Premium abrir conversa no
+WhatsApp, preencha a constante `WHATSAPP` no topo de `src/landing.js`
+(formato `55DDDNUMBER`). Enquanto vazio, os botoes levam para o app.
+
 ## Nuvem com Supabase (para vender / varios clientes)
 
 Schema pronto em `supabase/schema.sql` (tabelas `profiles` e `projects` +
