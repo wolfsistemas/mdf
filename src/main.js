@@ -52,6 +52,8 @@ let saleCtx = null
 let catalogQuery = ''
 let modal = null
 let editorLView = 'planta'
+let editorStep = 0
+let drawerOpen = false
 let authUser = null
 let syncTimer = null
 const groupOpen = {}
@@ -96,6 +98,7 @@ function setActive(id) {
   state.activeProjectId = id
   selectedFurnitureId = (project()?.furniture || [])[0]?.id || null
   modal = null
+  drawerOpen = false
   persist()
 }
 
@@ -105,6 +108,7 @@ function addProject() {
   state.projects.unshift(p)
   state.activeProjectId = p.id
   selectedFurnitureId = null
+  drawerOpen = false
   persist()
 }
 
@@ -121,6 +125,7 @@ function duplicateProject() {
   }))
   state.projects.unshift(copy)
   state.activeProjectId = copy.id
+  drawerOpen = false
   persist()
 }
 
@@ -128,6 +133,7 @@ function removeProject(id) {
   if (state.projects.length <= 1) return
   state.projects = state.projects.filter((p) => p.id !== id)
   if (state.activeProjectId === id) state.activeProjectId = state.projects[0].id
+  drawerOpen = false
   persist()
 }
 
@@ -347,6 +353,49 @@ function confirmDialog(message) {
   return typeof window.confirm === 'function' ? window.confirm(message) : true
 }
 
+/* ============================== mobile / drawer ============================== */
+
+const MOBILE_QUERY = '(max-width: 900px)'
+function isMobileNow() {
+  try {
+    return !!(window.matchMedia && window.matchMedia(MOBILE_QUERY).matches)
+  } catch (e) {
+    return false
+  }
+}
+function openDrawer() {
+  drawerOpen = true
+  refresh()
+}
+function closeDrawer() {
+  if (!drawerOpen) return
+  drawerOpen = false
+  refresh()
+}
+const EDITOR_STEPS = [
+  ['medidas', 'Medidas'],
+  ['acabamento', 'Acabamento'],
+  ['extras', 'Peças extras'],
+  ['resumo', 'Revisão']
+]
+function gotoStep(i) {
+  editorStep = Math.max(0, Math.min(EDITOR_STEPS.length - 1, i))
+  refresh()
+}
+function mobileNav() {
+  return h(
+    'nav',
+    { class: 'mobile-nav', 'aria-label': 'Abas do orçamento' },
+    tabsDef().map(([id, label]) =>
+      h(
+        'button',
+        { class: 'mnav' + (tab === id ? ' active' : ''), onClick: () => { tab = id; refresh() } },
+        [label]
+      )
+    )
+  )
+}
+
 /* ============================== nuvem (Supabase) ============================== */
 
 function currentPlan() {
@@ -524,9 +573,9 @@ function upgradeModal() {
 
 /* ============================== sidebar ============================== */
 
-function renderSidebar() {
+function renderSidebar(open = false) {
   const active = project()
-  return h('aside', { class: 'sidebar' }, [
+  return h('aside', { class: 'sidebar' + (open ? ' open' : '') }, [
     h('div', { class: 'brand' }, [
       h('div', { class: 'mark' }, ['MDF ATELIER']),
       h('h1', {}, ['Orçamentos']),
@@ -852,12 +901,14 @@ function startEditingModel(model) {
   const staged = createFurniture(model, furnitureList())
   if (!staged) return
   editorLView = 'planta'
+  editorStep = 0
   modal = { kind: 'edit', targetId: null, staged }
   refresh()
 }
 
 function openModalEdit(item) {
   editorLView = 'planta'
+  editorStep = 0
   modal = { kind: 'edit', targetId: item.id, staged: structuredClone(item) }
   refresh()
 }
@@ -877,6 +928,7 @@ function duplicateModalFrom(f) {
   project().furniture.push(fresh)
   selectedFurnitureId = fresh.id
   editorLView = 'planta'
+  editorStep = 0
   modal = { kind: 'edit', targetId: fresh.id, staged: fresh }
   persist()
 }
@@ -982,6 +1034,127 @@ function toggleGroup(name) {
 }
 
 function editorModal() {
+  return isMobileNow() ? editorModalMobile() : editorModalDesktop()
+}
+
+function editorModalMobile() {
+  const m = modal
+  const item = m.staged
+  const meta = modelMeta(item)
+  const isL = item.type === 'mesa' && (item.variant || '').startsWith('l-')
+  const isNew = !m.targetId
+  const step = Math.max(0, Math.min(EDITOR_STEPS.length - 1, editorStep))
+  const s = saleCalcForStaged(item)
+  const rateioActive = projectBillingBasis() === 'rateio'
+  const generated = flattenProjectPieces({ furniture: [{ ...item, qty: 1 }] })
+  const params = fieldsFor(item).filter((f) => !isParamHidden(item, f))
+  const stepsHeader = h(
+    'div',
+    { class: 'editor-steps', role: 'tablist' },
+    EDITOR_STEPS.map(([key, label], i) =>
+      h(
+        'button',
+        {
+          class: 'estep' + (i < step ? ' done' : '') + (i === step ? ' active' : ''),
+          onClick: () => gotoStep(i),
+          title: label
+        },
+        [h('span', { class: 'estep-n' }, [String(i + 1)]), h('span', {}, [label])]
+      )
+    )
+  )
+  let inner
+  if (step === 0) {
+    inner = [
+      h('div', { class: 'card' }, [
+        h('div', { class: 'row' }, [
+          field(
+            'Nome no orçamento',
+            text(item.name, (v) => updateFurniture(item.id, { name: v }), '[Código] Nome'),
+            'grow'
+          ),
+          field('Quantidade', inputNum(item.qty || 1, (v) => updateFurniture(item.id, { qty: Math.max(1, v) }), { min: '1' }))
+        ])
+      ]),
+      params.length
+        ? h('div', { class: 'card' }, [
+            h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), h('span', { class: 'help' }, [materialLine()])]),
+            h('div', { class: 'param-grid', style: 'margin-top:6px' }, params.map((f) => paramField(item, f)))
+          ])
+        : null,
+      h('p', { class: 'help step-tip' }, ['Ajuste medidas e opções — o custo é recalculado a cada mudança.'])
+    ]
+  } else if (step === 1) {
+    inner = [
+      h('div', { class: 'card' }, [
+        h('h3', {}, ['Cor / identificação']),
+        h('div', { class: 'row color-row' }, [
+          h('input', { type: 'color', value: item.color, onChange: (e) => updateFurniture(item.id, { color: e.target.value }) }),
+          h('div', { class: 'color-chip', style: `background:${item.color}` }),
+          h('p', { class: 'help grow' }, ['A cor aparece no documento impresso para identificar o móvel do cliente.'])
+        ])
+      ]),
+      h('div', { class: 'card' }, [
+        h('h3', {}, ['Material']),
+        h('p', { class: 'big-line' }, [materialLine()]),
+        h('p', { class: 'help' }, ['Tipo de chapa, espessura e preço da placa são definidos na aba Config. Fita e bordas de peças avulsas ficam em "Peças extras".'])
+      ])
+    ]
+  } else if (step === 2) {
+    inner = [extraPiecesBlock(item)]
+  } else {
+    inner = [
+      isL
+        ? h('div', { class: 'view-seg' }, [
+            h('button', { class: editorLView === 'planta' ? 'active' : '', onClick: () => setLView('planta') }, ['Vista superior']),
+            h('button', { class: editorLView === '3d' ? 'active' : '', onClick: () => setLView('3d') }, ['Perspectiva'])
+          ])
+        : null,
+      h('div', { class: 'modal-preview' }, [
+        h('div', { class: 'svg-frame', html: schematicSvg(item, isL ? editorLView : undefined) }),
+        h('div', { class: 'stat-chips' }, [
+          h('span', {}, [`${s.pieceCount} peça(s)`]),
+          h('span', {}, [formatM2(s.areaM2)]),
+          h('span', {}, [formatMeters(s.tapeM)]),
+          h('span', { class: 'chip-money' }, [`custo ${formatMoney(s.cost)}`])
+        ])
+      ]),
+      h('div', { class: 'card money-card' }, [
+        h('h3', {}, ['Custo e venda deste item']),
+        h('div', { class: 'money-grid' }, [
+          h('div', {}, [h('label', {}, ['Custo de material (1 un.)']), h('strong', {}, [formatMoney(s.cost)])]),
+          h('div', {}, [h('label', {}, ['Margem aplicada']), h('strong', {}, [`${s.margin.toFixed(0)}%`])]),
+          h('div', {}, [h('label', {}, ['Valor de venda (1 un.)']), h('strong', { class: 'accent' }, [formatMoney(s.salePerUnit)])])
+        ]),
+        h('p', { class: 'help' }, ['Margem é configurada na aba Custos (por item) ou no padrão global em Config.']),
+        rateioActive ? h('p', { class: 'help' }, ['Este orçamento usa "incluir custo das sobras": o custo acima já soma a parcela rateada da sobra das chapas.']) : null
+      ]),
+      h('p', { class: 'help center' }, [`${generated.length} tipo(s) de peça no corte${isNew ? ' — nada foi salvo ainda' : ''}.`])
+    ]
+  }
+  const lastStep = step >= EDITOR_STEPS.length - 1
+  return h('div', { class: 'modal-backdrop' }, [
+    h('div', { class: 'modal modal-editor' }, [
+      h('div', { class: 'modal-head' }, [
+        h('div', {}, [
+          h('h2', {}, [swatch(item.color, true), [` [${item.code}] `, meta.label]]),
+          h('span', { class: 'help' }, [meta.group + (isNew ? ' · novo item' : ' · editar item')])
+        ]),
+        h('div', { class: 'row' }, [
+          h('button', { class: 'btn small ghost x', onClick: modalCancel, 'aria-label': 'Fechar' }, ['✕'])
+        ])
+      ]),
+      h('div', { class: 'modal-body' }, [stepsHeader, h('div', { class: 'mobile-config' }, inner)]),
+      h('div', { class: 'modal-foot' }, [
+        step > 0 ? h('button', { class: 'btn', onClick: () => gotoStep(step - 1) }, ['Voltar']) : h('span', { class: 'help' }, [meta.group]),
+        h('span', { class: 'help step-info' }, [`${step + 1} de ${EDITOR_STEPS.length}`]),
+        h('button', { class: 'btn primary', onClick: () => (lastStep ? modalSave() : gotoStep(step + 1)) }, [lastStep ? (isNew ? 'Adicionar ao orçamento' : 'Salvar alterações') : 'Continuar'])
+      ])
+    ])
+  ])
+}
+
+function editorModalDesktop() {
   const m = modal
   const item = m.staged
   const meta = modelMeta(item)
@@ -1573,11 +1746,16 @@ function render() {
             ? tabCorte()
             : tabConfig()
 
+  const mobile = isMobileNow()
   root.append(
     h('div', { class: 'app' }, [
-      renderSidebar(),
+      mobile
+        ? h('button', { class: 'scrim' + (drawerOpen ? ' show' : ''), onClick: closeDrawer, 'aria-label': 'Fechar lista de projetos', title: 'Fechar' }, [])
+        : null,
+      renderSidebar(mobile && drawerOpen),
       h('section', { class: 'main' }, [
         h('div', { class: 'topbar' }, [
+          mobile ? h('button', { class: 'menu-btn', onClick: openDrawer, 'aria-label': 'Projetos e ações', title: 'Projetos / orçamentos' }, ['☰']) : null,
           h('div', { class: 'top-title' }, [
             h('strong', {}, [p.name]),
             h('span', {}, [`${(p.furniture || []).length} móvel(is) · ${(p.client && p.client) || 'sem cliente'} · `, new Date(p.createdAt).toLocaleDateString('pt-BR')])
@@ -1592,7 +1770,8 @@ function render() {
           h('div', { class: 'actions' }, topActions(p))
         ]),
         h('div', { class: 'content' }, [body]),
-        tab === 'orcamento' && !modal ? fabButton() : null
+        tab === 'orcamento' && !modal ? fabButton() : null,
+        mobile && !modal ? mobileNav() : null
       ])
     ])
   )
