@@ -33,7 +33,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          VITE_BILLING_URL: ${{ secrets.BILLING_URL }}
+          VITE_BILLING_URL: ${{ secrets.BILLING_URL || 'https://script.google.com/macros/s/AKfycbzKfLpnGAnlav80VOlqqa1oFYhaG4nUCGYdsY5TfJ8KAnUmHiJvb-YM3SRo7ROZjMhKHg/exec' }}
 
       - name: Upload artifact
         uses: actions/configure-pages@v5

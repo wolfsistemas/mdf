@@ -142,9 +142,11 @@ O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
    `ULTRA_PRICE_CENTS=8900`. Em teste: `MP_USE_SANDBOX=true`.
 4. Painel MP → Webhooks na URL do GAS: eventos de Planos e assinaturas +
    `payment` (modo teste e, depois, producao).
-5. `.env`: `VITE_BILLING_URL` = URL `/exec` do GAS. Sem isto o app esconde
-   Assinar e cai no WhatsApp (`SALE.whatsapp`) se estiver preenchido.
-6. Pages: secret `BILLING_URL` alem de `SUPABASE_URL` / `SUPABASE_ANON_KEY`.
+5. A URL `/exec` do GAS ja vai no app (`src/billing.js`) e no
+   `.env.example` (`VITE_BILLING_URL`). So mude se republicar o Web App
+   com URL nova.
+6. Pages: secrets `SUPABASE_URL` e `SUPABASE_ANON_KEY`. `BILLING_URL` e
+   opcional (ha fallback no codigo).
 
 Volta do checkout: `#/app?plano=ok` chama `sync_subscription`. Cancelar
 nao corta o mes ja pago.

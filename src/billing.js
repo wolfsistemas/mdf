@@ -26,7 +26,10 @@ export const PLANS = {
   }
 }
 
-const BILLING_URL = String(import.meta.env.VITE_BILLING_URL || '').trim()
+const DEFAULT_BILLING_URL =
+  'https://script.google.com/macros/s/AKfycbzKfLpnGAnlav80VOlqqa1oFYhaG4nUCGYdsY5TfJ8KAnUmHiJvb-YM3SRo7ROZjMhKHg/exec'
+
+const BILLING_URL = String(import.meta.env.VITE_BILLING_URL || DEFAULT_BILLING_URL).trim()
 
 export function billingConfigured() {
   return Boolean(BILLING_URL)
