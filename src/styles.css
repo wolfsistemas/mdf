@@ -34,6 +34,7 @@ input,
 select,
 textarea {
   font-family: inherit;
+  color-scheme: light;
 }
 
 #app {
@@ -278,11 +279,14 @@ textarea {
 
 input[type="text"],
 input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
 select,
 textarea {
-  background: var(--bg);
-  border: 1px solid var(--line-2);
-  color: var(--text);
+  background: #fbf8f2;
+  border: 1px solid #cbbfa9;
+  color: #241d15;
   border-radius: 8px;
   padding: 8px 10px;
   min-height: 36px;
@@ -1155,18 +1159,17 @@ input[type="color"] {
 }
 
 .doc-input {
-  background: transparent !important;
-  border: 1px dashed transparent !important;
-  border-bottom-color: #cbbfa9 !important;
-  border-radius: 4px !important;
+  background: #ffffff !important;
+  border: 1px solid #d9ccb6 !important;
+  border-radius: 8px !important;
   color: #241d15 !important;
-  padding: 6px 4px !important;
+  padding: 8px 10px !important;
   font-size: 14px;
 }
 
 .doc-input:hover,
 .doc-input:focus {
-  border-bottom-color: #b0803e !important;
+  border-color: #b0803e !important;
   outline: none;
 }
 
@@ -1673,8 +1676,10 @@ input[type="color"] {
   font-weight: 700 !important;
   line-height: 1.08 !important;
   letter-spacing: -0.01em;
-  padding: 2px 0 !important;
+  padding: 8px 10px !important;
   width: 100%;
+  background: #ffffff !important;
+  color: #241d15 !important;
 }
 
 .cover-sub {
@@ -2468,8 +2473,9 @@ td strong.gold {
 
   .auth-modal .doc-input {
     width: 100%;
-    background: var(--bg) !important;
-    border: 1px solid var(--line-2) !important;
+    background: #fbf8f2 !important;
+    color: #241d15 !important;
+    border: 1px solid #d9ccb6 !important;
     border-radius: 10px !important;
     padding: 12px !important;
   }
@@ -2797,8 +2803,9 @@ td strong.gold {
 
   .client-card .doc-input {
     width: 100%;
-    background: var(--bg) !important;
-    border: 1px solid var(--line-2) !important;
+    background: #fbf8f2 !important;
+    color: #241d15 !important;
+    border: 1px solid #d9ccb6 !important;
     border-radius: 10px !important;
     padding: 12px 12px !important;
   }
@@ -2905,4 +2912,71 @@ td strong.gold {
   margin: 0 0 8px;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.pdf-capture {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  width: 210mm;
+  background: #ffffff;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.pdf-capture .budget-doc {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pdf-capture .doc-page {
+  width: 190mm;
+  min-height: 277mm;
+  background: #ffffff;
+  box-shadow: none;
+  border: 0;
+  border-radius: 0;
+  margin: 0 0 8mm;
+  padding: 12mm 10mm;
+  color: #241d15;
+}
+
+.pdf-capture .print-hide,
+.pdf-capture .fab,
+.pdf-capture .mobile-nav {
+  display: none !important;
+}
+
+.pdf-capture .doc-input {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.capturing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(20, 17, 14, 0.72);
+  color: #fbf8f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.modal input[type='text'],
+.modal input[type='number'],
+.modal input[type='email'],
+.modal input[type='password'],
+.modal input[type='tel'],
+.modal textarea,
+.modal select {
+  background: #fbf8f2;
+  color: #241d15;
+  border-color: #d9ccb6;
 }

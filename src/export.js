@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 import { formatMoney, formatMeters, formatM2, GRAIN } from './store.js'
 import { edgeMeters, pieceAreaM2 } from './nesting.js'
 
@@ -74,101 +75,7 @@ export function exportPdf(project, settings, layout, summary, pieces) {
   doc.save(slug(project.name) + '-plano-corte.pdf')
 }
 
-export function quotePdfBlob(project, settings, items, totals) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
-  const pageH = doc.internal.pageSize.getHeight()
-  const m = 16
-  const date = new Date(project.createdAt || Date.now()).toLocaleDateString('pt-BR')
-  const shop = settings.shopName || 'MDF Atelier'
-  const phone = settings.shopPhone || ''
-  let y = 22
-
-  doc.setFillColor(36, 29, 21)
-  doc.rect(0, 0, pageW, 28, 'F')
-  doc.setTextColor(251, 248, 242)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.text(shop, m, 12)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text('ORÇAMENTO DE MÓVEIS PLANEJADOS', m, 20)
-  doc.setFont('helvetica', 'bold')
-  doc.text(date, pageW - m, 12, { align: 'right' })
-  if (phone) doc.setFont('helvetica', 'normal')
-  if (phone) doc.text(phone, pageW - m, 20, { align: 'right' })
-
-  y = 40
-  doc.setTextColor(36, 29, 21)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.text(project.name || 'Novo orçamento', m, y)
-  y += 8
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  if (project.client) {
-    doc.text('Cliente: ' + project.client + (project.phone ? '  ·  ' + project.phone : ''), m, y)
-    y += 6
-  }
-  if (project.notes) {
-    const notes = doc.splitTextToSize(project.notes, pageW - m * 2)
-    doc.text(notes, m, y)
-    y += notes.length * 5 + 2
-  }
-  y += 4
-  doc.setDrawColor(228, 220, 205)
-  doc.line(m, y, pageW - m, y)
-  y += 8
-
-  const list = items || []
-  list.forEach((it, i) => {
-    if (y > pageH - 40) {
-      doc.addPage()
-      y = 22
-    }
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.text((it.code ? '[' + it.code + '] ' : '') + (it.name || 'Item ' + (i + 1)), m, y)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    const right = formatMoney(it.lineTotal || 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text(right, pageW - m, y, { align: 'right' })
-    y += 5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(90, 80, 70)
-    const qty = it.qty > 1 ? it.qty + ' un.  ·  ' : ''
-    doc.text(qty + formatMoney(it.salePerUnit || 0) + ' / un.', m, y)
-    doc.setTextColor(36, 29, 21)
-    y += 8
-  })
-
-  if (y > pageH - 36) {
-    doc.addPage()
-    y = 22
-  }
-  y += 4
-  doc.setDrawColor(36, 29, 21)
-  doc.setLineWidth(0.6)
-  doc.line(m, y, pageW - m, y)
-  y += 10
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
-  doc.text('TOTAL DO ORÇAMENTO', m, y)
-  doc.text(formatMoney((totals && totals.sale) || 0), pageW - m, y, { align: 'right' })
-  y += 10
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(90, 80, 70)
-  const n = (totals && totals.count) || list.length
-  const u = (totals && totals.units) || n
-  doc.text(`${n} ${n === 1 ? 'item' : 'itens'} · ${u} ${u === 1 ? 'unidade' : 'unidades'}`, m, y)
-  y += 8
-  doc.text('Validade e condições combinadas na visita. Documento gerado pelo MDF Atelier.', m, y)
-
-  const blob = doc.output('blob')
-  const filename = slug(project.name) + '-orcamento.pdf'
+function packPdf(blob, filename) {
   let file = null
   try {
     file = new File([blob], filename, { type: 'application/pdf' })
@@ -178,9 +85,39 @@ export function quotePdfBlob(project, settings, items, totals) {
   return { blob, filename, file }
 }
 
-export function downloadQuotePdf(project, settings, items, totals) {
-  const { blob, filename } = quotePdfBlob(project, settings, items, totals)
+export function quoteFilename(name) {
+  return slug(name) + '-orcamento.pdf'
+}
+
+export function savePdfFile(blob, filename) {
   download(blob, filename)
+}
+
+export async function htmlPagesToPdfBlob(pageEls, filename) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const list = Array.from(pageEls || [])
+  if (!list.length) throw new Error('documento')
+  for (let i = 0; i < list.length; i++) {
+    if (i) doc.addPage()
+    const canvas = await html2canvas(list[i], {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    })
+    const img = canvas.toDataURL('image/jpeg', 0.92)
+    const ratio = canvas.height / Math.max(1, canvas.width)
+    let w = pageW
+    let h = pageW * ratio
+    if (h > pageH) {
+      h = pageH
+      w = pageH / ratio
+    }
+    doc.addImage(img, 'JPEG', (pageW - w) / 2, 0, w, h)
+  }
+  return packPdf(doc.output('blob'), filename)
 }
 
 function coverPage(doc, project, settings, summary, pageW, pageH, margin) {

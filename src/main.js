@@ -12,7 +12,7 @@ import {
   formatMm
 } from './store.js'
 import { nest, summarize, edgeMeters, pieceAreaM2 } from './nesting.js'
-import { exportCsv, exportPdf, quotePdfBlob, downloadQuotePdf } from './export.js'
+import { exportCsv, exportPdf, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
 import {
   CATALOG_GROUPS,
   modelMeta,
@@ -895,70 +895,74 @@ function itemDims(item) {
   return parts.join(' × ')
 }
 
-function quoteShareItems() {
-  return furnitureList().map((f) => {
-    const s = saleCalc(f)
-    return {
-      code: f.code,
-      name: f.name,
-      qty: s.qty,
-      salePerUnit: s.salePerUnit,
-      lineTotal: s.lineTotal
-    }
-  })
+function waitFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+}
+
+async function buildQuotePdf() {
+  const p = project()
+  const filename = quoteFilename(p.name)
+  const prevPrint = printFull
+  printFull = true
+  render()
+  await waitFrame()
+  const src = document.querySelector('.budget-doc')
+  if (!src) {
+    printFull = prevPrint
+    render()
+    throw new Error('documento')
+  }
+  const host = document.createElement('div')
+  host.className = 'pdf-capture'
+  const clone = src.cloneNode(true)
+  clone.querySelectorAll('.print-hide').forEach((el) => el.remove())
+  host.append(clone)
+  document.body.append(host)
+  const imgs = Array.from(host.querySelectorAll('img'))
+  await Promise.all(
+    imgs.map((img) => (img.complete ? Promise.resolve() : new Promise((res) => {
+      img.onload = res
+      img.onerror = res
+    })))
+  )
+  await waitFrame()
+  try {
+    return await htmlPagesToPdfBlob(host.querySelectorAll('.doc-page'), filename)
+  } finally {
+    host.remove()
+    printFull = prevPrint
+    render()
+  }
 }
 
 function shareQuote() {
   if (shareBusy) return
   shareBusy = true
+  const overlay = document.createElement('div')
+  overlay.className = 'capturing-overlay'
+  overlay.textContent = 'Gerando PDF…'
+  document.body.append(overlay)
   const p = project()
-  const items = quoteShareItems()
   const totals = projectSaleTotals()
-  const done = () => {
-    shareBusy = false
-  }
-  let packed
-  try {
-    packed = quotePdfBlob(p, state.settings, items, totals)
-  } catch {
-    done()
-    return
-  }
-  const file = packed.file
   const title = p.name || 'Orçamento'
   const text = `${p.client ? p.client + ' · ' : ''}${formatMoney(totals.sale)}`
-  const fallback = () => {
-    downloadQuotePdf(p, state.settings, items, totals)
-    done()
+  const finish = () => {
+    shareBusy = false
+    overlay.remove()
   }
-  try {
-    if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator
-        .share({ title, text, files: [file] })
-        .then(done)
-        .catch((err) => {
-          if (err && err.name === 'AbortError') done()
-          else fallback()
+  buildQuotePdf()
+    .then((packed) => {
+      const file = packed.file
+      const save = () => savePdfFile(packed.blob, packed.filename)
+      if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        return navigator.share({ title, text, files: [file] }).catch((err) => {
+          if (!err || err.name !== 'AbortError') save()
         })
-      return
-    }
-    if (navigator.share) {
-      navigator
-        .share({
-          title,
-          text: `Orçamento ${p.name || ''}${p.client ? ' — ' + p.client : ''}: ${formatMoney(totals.sale)}`
-        })
-        .then(() => fallback())
-        .catch((err) => {
-          if (err && err.name === 'AbortError') done()
-          else fallback()
-        })
-      return
-    }
-    fallback()
-  } catch {
-    fallback()
-  }
+      }
+      save()
+    })
+    .catch(() => {})
+    .finally(finish)
 }
 
 function mobileClientCard(p) {
