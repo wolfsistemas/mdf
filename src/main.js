@@ -53,7 +53,7 @@ qrcode.stringToBytes =
     : (s) => Array.from(s, (ch) => ch.charCodeAt(0) & 0xff)
 
 const state = loadState()
-let tab = 'orcamento'
+let tab = 'projetos'
 let selectedFurnitureId = null
 let layoutCache = null
 let summaryCache = null
@@ -63,7 +63,6 @@ let catalogQuery = ''
 let modal = null
 let editorLView = 'planta'
 let editorStep = 0
-let drawerOpen = false
 let listFocusId = null
 let printFull = false
 let authUser = null
@@ -86,12 +85,39 @@ function selectedFurniture() {
   return list.find((f) => f.id === selectedFurnitureId) || list[0] || null
 }
 
+function emptyLayout() {
+  return { boards: [], unplaced: [], sheetsNeeded: 0, efficiency: 0, wasteArea: 0 }
+}
+function emptySummary() {
+  return {
+    sheets: 0,
+    efficiency: 0,
+    pieceCount: 0,
+    tapeM: 0,
+    areaM2: 0,
+    total: 0,
+    sheetCost: 0,
+    tapeCost: 0,
+    labor: 0,
+    sheetAreaM2: 0,
+    wasteM2: 0,
+    unplaced: 0,
+    byFurniture: []
+  }
+}
 function recalc() {
   const p = project()
+  if (!p) {
+    piecesCache = []
+    layoutCache = emptyLayout()
+    summaryCache = emptySummary()
+    saleCtx = null
+    return
+  }
   piecesCache = flattenProjectPieces(p)
   layoutCache = nest(piecesCache, state.settings)
   summaryCache = summarize(p, state.settings, layoutCache, piecesCache)
-  saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, project().billingBasis || 'used')
+  saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, p.billingBasis || 'used')
 }
 function persist() {
   saveState(state)
@@ -107,7 +133,7 @@ function scheduleCloud() {
       .then(() => {
         lastSyncAt = Date.now()
         lastSyncOk = true
-        const chip = document.querySelector('.cloud-txt span')
+        const chip = document.querySelector('.account-txt span')
         if (chip) chip.textContent = syncLabel()
       })
       .catch(() => {
@@ -134,8 +160,8 @@ function setActive(id) {
   state.activeProjectId = id
   selectedFurnitureId = (project()?.furniture || [])[0]?.id || null
   modal = null
-  drawerOpen = false
   listFocusId = null
+  tab = 'orcamento'
   persist()
 }
 
@@ -145,8 +171,8 @@ function addProject() {
   state.projects.unshift(p)
   state.activeProjectId = p.id
   selectedFurnitureId = null
-  drawerOpen = false
   listFocusId = null
+  tab = 'orcamento'
   persist()
 }
 
@@ -163,8 +189,8 @@ function duplicateProject() {
   }))
   state.projects.unshift(copy)
   state.activeProjectId = copy.id
-  drawerOpen = false
   listFocusId = null
+  tab = 'orcamento'
   persist()
 }
 
@@ -172,7 +198,6 @@ function removeProject(id) {
   if (state.projects.length <= 1) return
   state.projects = state.projects.filter((p) => p.id !== id)
   if (state.activeProjectId === id) state.activeProjectId = state.projects[0].id
-  drawerOpen = false
   listFocusId = null
   persist()
 }
@@ -402,7 +427,7 @@ function confirmDialog(message) {
   return typeof window.confirm === 'function' ? window.confirm(message) : true
 }
 
-/* ============================== mobile / drawer ============================== */
+/* ============================== mobile ============================== */
 
 const MOBILE_QUERY = '(max-width: 900px)'
 function isMobileNow() {
@@ -411,15 +436,6 @@ function isMobileNow() {
   } catch (e) {
     return false
   }
-}
-function openDrawer() {
-  drawerOpen = true
-  refresh()
-}
-function closeDrawer() {
-  if (!drawerOpen) return
-  drawerOpen = false
-  refresh()
 }
 const EDITOR_STEPS = [
   ['medidas', 'Medidas'],
@@ -439,7 +455,7 @@ function selectTab(id) {
 function mobileNav() {
   return h(
     'nav',
-    { class: 'mobile-nav', 'aria-label': 'Abas do orçamento' },
+    { class: 'mobile-nav', 'aria-label': 'Navegação' },
     tabsDef().map(([id, label]) =>
       h(
         'button',
@@ -474,28 +490,22 @@ function openUpgrade(message, plan) {
   render()
 }
 
-function cloudChip() {
-  const cls = 'cloud-chip' + (authUser ? ' on' : '')
+function accountMenu() {
+  const plan = currentPlan()
   if (authUser) {
-    const plan = currentPlan()
-    const buttons = []
-    if (isLimitedPlan(plan)) {
-      buttons.push(h('button', { class: 'btn small primary', onClick: () => openUpgrade('Faça upgrade para criar quantos orçamentos quiser.') }, ['Fazer upgrade']))
-    }
-    buttons.push(h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair']))
-    return h('div', { class: cls }, [
-      h('div', { class: 'cloud-txt' }, [
-        h('strong', {}, [`Nuvem ativa · Plano ${planLabel(plan)}`]),
-        h('span', {}, [syncLabel()])
+    return h('div', { class: 'account-menu' }, [
+      h('div', { class: 'account-txt' }, [
+        h('strong', {}, [planLabel(plan)]),
+        h('span', {}, [authUser.email || syncLabel()])
       ]),
-      buttons
+      isLimitedPlan(plan)
+        ? h('button', { class: 'btn small primary', onClick: () => openUpgrade('Faça upgrade para criar quantos orçamentos quiser.') }, ['Upgrade'])
+        : null,
+      h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair'])
     ])
   }
-  return h('div', { class: cls }, [
-    h('div', { class: 'cloud-txt' }, [
-      h('strong', {}, ['Backup na nuvem']),
-      h('span', {}, ['Entre ou crie uma conta para sincronizar os orçamentos.'])
-    ]),
+  if (!cloudConfigured()) return null
+  return h('div', { class: 'account-menu' }, [
     h('button', { class: 'btn small primary', onClick: openAuth }, ['Entrar'])
   ])
 }
@@ -778,54 +788,62 @@ function upgradeModal() {
   ])
 }
 
-/* ============================== sidebar ============================== */
+/* ============================== home / projetos ============================== */
 
-function renderSidebar(open = false) {
-  const active = project()
-  return h('aside', { class: 'sidebar' + (open ? ' open' : '') }, [
-    h('div', { class: 'brand' }, [
-      h('div', { class: 'mark' }, ['MDF ATELIER']),
-      h('h1', {}, ['Orçamentos']),
-      h('p', {}, ['Monte os móveis do cliente, calcule o custo com margem e gere o orçamento impresso com foto, descrição e valores.'])
-    ]),
-    h('div', { class: 'side-actions' }, [
-      h('button', { class: 'btn primary', onClick: addProject }, ['+ Orçamento']),
-      h('button', { class: 'btn', title: 'Duplicar orçamento atual', onClick: duplicateProject }, ['Duplicar']),
-      h(
-        'button',
-        {
-          class: 'btn ghost danger-side',
-          disabled: state.projects.length <= 1,
-          title: state.projects.length <= 1 ? 'Não é possível excluir o único orçamento' : 'Excluir orçamento atual',
-          onClick: () => {
-            if (confirmDialog('Excluir este orçamento e todas as suas peças?')) removeProject(state.activeProjectId)
-          }
-        },
-        ['Excluir']
-      )
-    ]),
-    h('div', { class: 'section-label' }, ['PROJETOS / ORÇAMENTOS']),
-    h(
-      'div',
-      { class: 'project-list' },
-      state.projects.map((p) =>
+function openProject(id) {
+  setActive(id)
+}
+
+function duplicateProjectFrom(id) {
+  const cur = state.activeProjectId
+  state.activeProjectId = id
+  const n = state.projects.length
+  duplicateProject()
+  if (state.projects.length === n) state.activeProjectId = cur
+}
+
+function tabProjetos() {
+  const plan = currentPlan()
+  const rows = state.projects.map((p) => {
+    const n = (p.furniture || []).length
+    const date = new Date(p.createdAt).toLocaleDateString('pt-BR')
+    return h('div', { class: 'home-card' + (p.id === state.activeProjectId ? ' active' : '') }, [
+      h('button', { class: 'home-card-main', onClick: () => openProject(p.id) }, [
+        h('strong', {}, [p.name || 'Novo orçamento']),
+        h('span', {}, [
+          `${p.client ? p.client + ' · ' : ''}${n} ${n === 1 ? 'móvel' : 'móveis'} · ${date}`
+        ])
+      ]),
+      h('div', { class: 'home-card-actions' }, [
+        h('button', { class: 'btn small', onClick: () => openProject(p.id) }, ['Abrir']),
+        h('button', { class: 'btn small', onClick: () => duplicateProjectFrom(p.id) }, ['Duplicar']),
         h(
           'button',
           {
-            class: 'project-item' + (p.id === state.activeProjectId ? ' active' : ''),
-            onClick: () => setActive(p.id)
+            class: 'btn small ghost danger-side',
+            disabled: state.projects.length <= 1,
+            onClick: () => {
+              if (confirmDialog('Excluir este orçamento e todas as suas peças?')) removeProject(p.id)
+            }
           },
-          [
-            h('strong', {}, [p.name]),
-            h('span', {}, [
-              `${p.client ? p.client + ' · ' : ''}${(p.furniture || []).length} móvel(is) · ${new Date(p.createdAt).toLocaleDateString('pt-BR')}`
-            ])
-          ]
+          ['Excluir']
         )
-      )
-    ),
-    active && active.notes ? h('div', { class: 'side-note' }, [active.notes]) : null,
-    cloudConfigured() ? cloudChip() : null
+      ])
+    ])
+  })
+  return h('div', { class: 'home' }, [
+    h('div', { class: 'home-head' }, [
+      h('div', {}, [
+        h('h2', {}, ['Orçamentos']),
+        h('p', { class: 'help' }, [
+          isLimitedPlan(plan)
+            ? `Plano ${planLabel(plan)} · ${state.projects.length} de ${FREE_PROJECT_LIMIT} orçamentos.`
+            : `Plano ${planLabel(plan)} · ${state.projects.length} orçamento(s).`
+        ])
+      ]),
+      h('button', { class: 'btn primary', onClick: addProject }, ['+ Novo orçamento'])
+    ]),
+    rows.length ? h('div', { class: 'home-grid' }, rows) : h('div', { class: 'card' }, [h('p', { class: 'help' }, ['Nenhum orçamento ainda.'])])
   ])
 }
 
@@ -2028,7 +2046,6 @@ function tabPecas() {
 function tabCorte() {
   const layout = layoutCache
   const s = state.settings
-  const mobile = isMobileNow()
   const summary = h('div', { class: 'card' }, [
     h('h2', {}, ['Plano de corte do projeto']),
     h('p', { class: 'help' }, [
@@ -2036,9 +2053,6 @@ function tabCorte() {
         ? `${layout.sheetsNeeded} chapa(s) · aproveitamento ${layout.efficiency.toFixed(1)}% · modo ${s.cutMode === 'free' ? 'nesting livre' : 'serra / guilhotina'} · kerf ${s.kerf} mm. Cores = móvel.`
         : 'Adicione móveis para gerar o nesting.'
     ]),
-    mobile
-      ? h('p', { class: 'help' }, ['No celular mostramos o resumo. Para o plano de impressão completo, use o computador ou o botão "PDF plano".'])
-      : null,
     legend(),
     layout.unplaced.length
       ? h('p', { class: 'unplaced' }, [
@@ -2046,19 +2060,6 @@ function tabCorte() {
         ])
       : null
   ])
-  if (mobile) {
-    const boards = (layout.boards || []).map((board) =>
-      h('div', { class: 'cut-board-row' }, [
-        h('strong', {}, [`Chapa ${board.index}`]),
-        h('span', {}, [`${board.placements.length} peças · ${board.efficiency.toFixed(1)}%`])
-      ])
-    )
-    return h('div', {}, [
-      kpis(),
-      summary,
-      h('div', { class: 'card' }, boards.length ? boards : [h('p', { class: 'help' }, ['Nenhuma chapa gerada.'])])
-    ])
-  }
   return h('div', {}, [
     kpis(),
     summary,
@@ -2083,7 +2084,8 @@ function legend() {
 }
 
 function sheetEl(board) {
-  const maxW = Math.min(920, window.innerWidth - 80)
+  const pad = isMobileNow() ? 48 : 80
+  const maxW = Math.min(920, Math.max(220, window.innerWidth - pad))
   const scale = maxW / board.sheetWidth
   const w = board.sheetWidth * scale
   const hgt = board.sheetHeight * scale
@@ -2119,17 +2121,28 @@ function sheetEl(board) {
 
 /* ============================== ABA CONFIG ============================== */
 
-function tabConfig() {
+function settingsPatch(patch) {
+  Object.assign(state.settings, patch)
+  persist()
+}
+
+function tabConta() {
   const s = state.settings
-  const set = (patch) => {
-    Object.assign(state.settings, patch)
-    persist()
-  }
+  const set = settingsPatch
+  const plan = currentPlan()
   return h('div', {}, [
     h('div', { class: 'card' }, [
-      h('h2', {}, ['Empresa e venda']),
+      h('h2', {}, ['Conta e empresa']),
+      h('p', { class: 'help' }, ['Estes dados valem para todos os orçamentos: logo, WhatsApp, margem e materiais padrão.']),
+      h('p', { class: 'help' }, [`Plano atual: ${planLabel(plan)}. ${authUser ? authUser.email : 'Sem login — os orçamentos ficam só neste aparelho.'}`]),
+      cloudConfigured() && !authUser
+        ? h('div', { class: 'row', style: 'margin-top:10px' }, [h('button', { class: 'btn primary', onClick: openAuth }, ['Entrar ou criar conta'])])
+        : null
+    ]),
+    h('div', { class: 'card' }, [
+      h('h2', {}, ['Marca no documento']),
       h('div', { class: 'row' }, [
-        field('Nome da empresa (no orçamento)', text(s.shopName || '', (v) => set({ shopName: v })), 'grow'),
+        field('Nome da empresa', text(s.shopName || '', (v) => set({ shopName: v })), 'grow'),
         field('Telefone / WhatsApp', text(s.shopPhone || '', (v) => set({ shopPhone: v })))
       ]),
       h('div', { class: 'logo-config' }, [
@@ -2142,21 +2155,24 @@ function tabConfig() {
               h('img', { class: 'logo-preview', src: s.shopLogo, alt: 'Logo atual' }),
               h('button', { class: 'btn small ghost', onClick: clearShopLogo }, ['Remover logo'])
             ])
-          : h('p', { class: 'help' }, ['A logo aparece na capa e no rodapé do orçamento. Sem arquivo, usamos o monograma.'])
+          : h('p', { class: 'help' }, ['A logo aparece na capa e no rodapé de todos os orçamentos. Sem arquivo, usamos o monograma.'])
       ]),
-      h('div', { class: 'row', style: 'margin-top:10px' }, [
+      h('p', { class: 'help' }, [
+        'O WhatsApp aparece no documento com um QR code: ao escanear, o cliente já abre a conversa com o nome e o valor daquele orçamento.'
+      ])
+    ]),
+    h('div', { class: 'card' }, [
+      h('h2', {}, ['Venda padrão']),
+      h('div', { class: 'row' }, [
         field('Margem padrão sobre o custo %', inputNum(s.defaultMargin ?? 100, (v) => set({ defaultMargin: v }), { step: '5' }), 'grow'),
         field('% extra (mão de obra)', inputNum(s.laborPercent || 0, (v) => set({ laborPercent: v }), { step: '0.5' }))
       ]),
       h('p', { class: 'help' }, [
-        'A margem padrão vale para todos os itens, mas cada móvel pode ter a própria margem na aba Custos. O % extra (mão de obra / perda) entra no custo de cada item.'
-      ]),
-      h('p', { class: 'help' }, [
-        'O WhatsApp informado aparece no documento do orçamento com um QR code: ao escanear, o cliente já abre a conversa com o nome e o valor deste orçamento.'
+        'A margem padrão vale para todos os itens. Cada móvel pode ter a própria margem na aba Custos daquele orçamento.'
       ])
     ]),
     h('div', { class: 'card' }, [
-      h('h2', {}, ['Chapa e corte']),
+      h('h2', {}, ['Chapa e corte padrão']),
       h('div', { class: 'row' }, [
         field('Nome da chapa', text(s.sheetName, (v) => set({ sheetName: v })), 'grow'),
         field('Largura mm', inputNum(s.sheetWidth, (v) => set({ sheetWidth: v }))),
@@ -2184,7 +2200,7 @@ function tabConfig() {
       ])
     ]),
     h('div', { class: 'card' }, [
-      h('h2', {}, ['Fita de borda']),
+      h('h2', {}, ['Fita de borda padrão']),
       h('div', { class: 'row' }, [
         field('Nome da fita', text(s.tapeName, (v) => set({ tapeName: v })), 'grow'),
         field('Preço por metro', inputNum(s.tapePricePerMeter, (v) => set({ tapePricePerMeter: v }), { step: '0.01' }))
@@ -2197,15 +2213,17 @@ function tabConfig() {
 
 function tabsDef() {
   return [
+    ['projetos', 'Projetos'],
     ['orcamento', 'Orçamento'],
     ['custos', 'Custos'],
     ['pecas', 'Peças'],
     ['corte', 'Corte'],
-    ['config', 'Config']
+    ['conta', 'Conta']
   ]
 }
 
 function topActions(p) {
+  if (tab === 'projetos' || tab === 'conta' || !p) return []
   const btns = [h('button', { class: 'btn', title: 'Baixar CSV com todas as peças do projeto', onClick: () => exportCsv(p, piecesCache) }, ['CSV peças'])]
   if (tab === 'orcamento') {
     btns.unshift(
@@ -2262,35 +2280,39 @@ function render() {
   if (!selectedFurnitureId && furnitureList()[0]) selectedFurnitureId = furnitureList()[0].id
 
   const body =
-    mobile && tab === 'orcamento' && !printFull
-      ? mobileOrcamento()
-      : tab === 'orcamento'
-        ? tabOrcamento()
-        : tab === 'custos'
-          ? tabCustos()
-          : tab === 'pecas'
-            ? tabPecas()
-            : tab === 'corte'
-              ? tabCorte()
-              : tabConfig()
+    tab === 'projetos'
+      ? tabProjetos()
+      : tab === 'conta'
+        ? tabConta()
+        : mobile && tab === 'orcamento' && !printFull
+          ? mobileOrcamento()
+          : tab === 'orcamento'
+            ? tabOrcamento()
+            : tab === 'custos'
+              ? tabCustos()
+              : tab === 'pecas'
+                ? tabPecas()
+                : tab === 'corte'
+                  ? tabCorte()
+                  : tabProjetos()
+
+  const title =
+    tab === 'projetos' || tab === 'conta' || !p
+      ? [h('strong', {}, ['MDF Atelier']), h('span', {}, [tab === 'conta' ? 'Configuração da conta' : 'Seus orçamentos'])]
+      : [
+          h('strong', {}, [p.name]),
+          h('span', {}, [`${(p.furniture || []).length} móvel(is) · ${(p.client && p.client) || 'sem cliente'} · `, new Date(p.createdAt).toLocaleDateString('pt-BR')])
+        ]
 
   root.append(
     h('div', { class: 'app' }, [
-      mobile
-        ? h('button', { class: 'scrim' + (drawerOpen ? ' show' : ''), onClick: closeDrawer, 'aria-label': 'Fechar lista de projetos', title: 'Fechar' }, [])
-        : null,
-      renderSidebar(mobile && drawerOpen),
       h('section', { class: 'main' }, [
         h('div', { class: 'topbar' }, [
-          mobile ? h('button', { class: 'menu-btn', onClick: openDrawer, 'aria-label': 'Projetos e ações', title: 'Projetos / orçamentos' }, ['☰']) : null,
-          h('div', { class: 'top-title' }, [
-            h('strong', {}, [p.name]),
-            h('span', {}, [`${(p.furniture || []).length} móvel(is) · ${(p.client && p.client) || 'sem cliente'} · `, new Date(p.createdAt).toLocaleDateString('pt-BR')])
-          ]),
+          h('div', { class: 'top-title' }, title),
           h('div', { class: 'tabs', role: 'tablist' }, tabsDef().map(([id, label]) =>
             h('button', { class: 'tab' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) }, [label])
           )),
-          h('div', { class: 'actions' }, topActions(p))
+          h('div', { class: 'actions' }, [...topActions(p), accountMenu()])
         ]),
         h('div', { class: 'content' }, [body]),
         tab === 'orcamento' && !modal ? fabButton() : null,
@@ -2341,12 +2363,12 @@ function fabButton() {
 const TOUR_KEY = 'mdf-atelier-tour-v1'
 const TOUR_STEPS = [
   {
-    title: 'Cliente na hora',
-    body: 'No celular, o nome, o telefone e as observações ficam no topo do orçamento. Preencha antes de enviar.'
+    title: 'Seus orçamentos',
+    body: 'A tela inicial lista os projetos. Toque em um para abrir, ou crie um novo. Logo, WhatsApp e margem padrão ficam em Conta.'
   },
   {
     title: 'Monte o móvel em 4 passos',
-    body: 'Toque no + para escolher o modelo. Medidas, acabamento, peças extras e revisão — um passo de cada vez.'
+    body: 'No orçamento, toque no + para escolher o modelo. Medidas, acabamento, peças extras e revisão — um passo de cada vez.'
   },
   {
     title: 'Envie o PDF',

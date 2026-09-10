@@ -43,16 +43,12 @@ textarea {
 
 .app {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 1fr;
   height: 100%;
 }
 
 .sidebar {
-  background: var(--bg-2);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  display: none;
 }
 
 .brand {
@@ -794,9 +790,6 @@ input[type="color"] {
   .app {
     grid-template-columns: 1fr;
   }
-  .sidebar {
-    max-height: 240px;
-  }
   .kpis {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -821,7 +814,112 @@ input[type="color"] {
    ===================================================================== */
 
 .app {
-  grid-template-columns: 264px 1fr;
+  grid-template-columns: 1fr;
+}
+
+.account-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.account-txt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  max-width: 200px;
+}
+
+.account-txt strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.account-txt span {
+  color: var(--muted);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.home-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.home-head h2 {
+  margin: 0 0 4px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.home-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-card.active {
+  border-color: var(--gold);
+}
+
+.home-card-main {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.home-card-main:hover strong {
+  color: var(--gold-2);
+}
+
+.btn.danger-side {
+  color: var(--warn);
+  border-color: #5a3a32;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.home-card-main strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.home-card-main span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.home-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ---------- Sidebar ---------- */
@@ -2092,9 +2190,7 @@ td strong.gold {
   .kpis,
   .print-hide,
   .mobile-nav,
-  .tour-backdrop,
-  .scrim,
-  .menu-btn {
+  .tour-backdrop {
     display: none !important;
   }
   .app {
@@ -2193,21 +2289,12 @@ td strong.gold {
   .budget-doc {
     padding: 16px;
   }
-  .top-title {
-    display: none;
-  }
 }
 
 /* Restaura o comportamento responsivo do layout app/sidebar (1100px) */
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: 1fr !important;
-  }
-  .sidebar {
-    max-height: 280px;
-  }
-  .top-title {
-    display: none;
   }
   .tabs {
     justify-content: flex-start;
@@ -2233,13 +2320,11 @@ td strong.gold {
 }
 
 /* =====================================================================
-   APP no smartphone (≤900px) — gaveta de projetos, barra inferior,
-   editor passo a passo e campos grandes para toque
+   APP no smartphone (≤900px) — barra inferior, editor passo a passo
+   e campos grandes para toque
    ===================================================================== */
 
-.menu-btn,
-.mobile-nav,
-.scrim {
+.mobile-nav {
   display: none;
 }
 
@@ -2248,83 +2333,13 @@ td strong.gold {
     -webkit-text-size-adjust: 100%;
   }
 
-  /* ---------- gaveta de projetos ---------- */
-
-  .scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 54;
-    border: 0;
-    padding: 0;
-    background: rgba(12, 9, 6, 0.55);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-  }
-
-  .scrim.show {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: auto;
-    z-index: 55;
-    width: min(320px, 86vw);
-    height: 100vh;
-    height: 100dvh;
-    max-height: none;
-    transform: translateX(-105%);
-    transition: transform 0.22s ease;
-    border-right: 1px solid var(--line);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-
-  .sidebar.open {
-    transform: none;
-    box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
-  }
-
-  .sidebar .brand {
-    padding-top: 18px;
-  }
-
-  .sidebar .brand h1 {
-    font-size: 20px;
-  }
-
-  .sidebar .brand p {
-    display: none;
-  }
-
-  /* ---------- topbar: hambúrguer + título + ações ---------- */
+  /* ---------- topbar: título + ações ---------- */
 
   .topbar {
     gap: 8px;
     padding: 10px 12px;
     flex-direction: row;
     align-items: center;
-  }
-
-  .menu-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 40px;
-    font-size: 18px;
-    line-height: 1;
-    color: var(--gold);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    flex: 0 0 auto;
   }
 
   .topbar .tabs {
@@ -2345,6 +2360,32 @@ td strong.gold {
     width: 100%;
     justify-content: flex-end;
     order: 5;
+  }
+
+  .account-txt {
+    display: none;
+  }
+
+  .sheet-wrap {
+    padding: 10px;
+  }
+
+  .piece-box {
+    font-size: 9px;
+    padding: 2px 3px;
+  }
+
+  .piece-box b {
+    font-size: 10px;
+  }
+
+  .piece-box span {
+    font-size: 8px;
+  }
+
+  .mobile-nav .mnav {
+    font-size: 11px;
+    padding: 8px 1px;
   }
 
   /* ---------- conteúdo e FAB ---------- */
@@ -2375,6 +2416,7 @@ td strong.gold {
     background: rgba(20, 17, 14, 0.96);
     border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
+    overflow-x: auto;
   }
 
   .mobile-nav .mnav {
