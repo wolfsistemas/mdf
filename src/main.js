@@ -288,6 +288,18 @@ function projectSaleTotals() {
   return calcProjectTotals(furnitureList(), state.settings, saleCtx)
 }
 
+function moneyForProject(p) {
+  const furniture = (p && p.furniture) || []
+  const pieces = flattenProjectPieces(p)
+  const layout = nest(pieces, state.settings)
+  const ctx = calcRateioCtx(furniture, state.settings, layout.sheetsNeeded, (p && p.billingBasis) || 'used')
+  return calcProjectTotals(furniture, state.settings, ctx)
+}
+
+function clientWaDigits(p) {
+  return String((p && p.phone) || '').replace(/\D/g, '')
+}
+
 function projectBillingBasis() {
   const b = (project() && project().billingBasis) || 'used'
   return b === 'rateio' ? 'rateio' : 'used'
@@ -492,6 +504,11 @@ function openUpgrade(message, plan) {
 
 function accountMenu() {
   const plan = currentPlan()
+  const contaBtn = h(
+    'button',
+    { class: 'btn small' + (tab === 'conta' ? ' primary' : ' ghost'), onClick: () => selectTab('conta') },
+    ['Conta']
+  )
   if (authUser) {
     return h('div', { class: 'account-menu' }, [
       h('div', { class: 'account-txt' }, [
@@ -501,13 +518,14 @@ function accountMenu() {
       isLimitedPlan(plan)
         ? h('button', { class: 'btn small primary', onClick: () => openUpgrade('Faça upgrade para criar quantos orçamentos quiser.') }, ['Upgrade'])
         : null,
+      contaBtn,
       h('button', { class: 'btn small ghost', onClick: cloudLogout }, ['Sair'])
     ])
   }
-  if (!cloudConfigured()) return null
-  return h('div', { class: 'account-menu' }, [
-    h('button', { class: 'btn small primary', onClick: openAuth }, ['Entrar'])
-  ])
+  const enter = cloudConfigured()
+    ? h('button', { class: 'btn small primary', onClick: openAuth }, ['Entrar'])
+    : null
+  return h('div', { class: 'account-menu' }, [contaBtn, enter])
 }
 
 function openAuth() {
@@ -807,6 +825,8 @@ function tabProjetos() {
   const rows = state.projects.map((p) => {
     const n = (p.furniture || []).length
     const date = new Date(p.createdAt).toLocaleDateString('pt-BR')
+    const money = moneyForProject(p)
+    const phone = clientWaDigits(p)
     return h('div', { class: 'home-card' + (p.id === state.activeProjectId ? ' active' : '') }, [
       h('button', { class: 'home-card-main', onClick: () => openProject(p.id) }, [
         h('strong', {}, [p.name || 'Novo orçamento']),
@@ -814,9 +834,23 @@ function tabProjetos() {
           `${p.client ? p.client + ' · ' : ''}${n} ${n === 1 ? 'móvel' : 'móveis'} · ${date}`
         ])
       ]),
+      h('div', { class: 'home-money' }, [
+        h('div', {}, [h('label', {}, ['Custo']), h('strong', { class: 'home-cost' }, [formatMoney(money.cost)])]),
+        h('div', {}, [h('label', {}, ['Lucro']), h('strong', { class: 'home-profit' }, [formatMoney(money.profit)])]),
+        h('div', {}, [h('label', {}, ['Venda']), h('strong', { class: 'home-sale' }, [formatMoney(money.sale)])])
+      ]),
       h('div', { class: 'home-card-actions' }, [
         h('button', { class: 'btn small', onClick: () => openProject(p.id) }, ['Abrir']),
         h('button', { class: 'btn small', onClick: () => duplicateProjectFrom(p.id) }, ['Duplicar']),
+        h(
+          'button',
+          {
+            class: 'btn small primary',
+            title: phone ? 'Enviar o PDF pelo WhatsApp do cliente' : 'Gerar o PDF e compartilhar',
+            onClick: () => shareProjectWhatsApp(p.id)
+          },
+          ['WhatsApp']
+        ),
         h(
           'button',
           {
@@ -954,30 +988,62 @@ async function buildQuotePdf() {
 }
 
 function shareQuote() {
+  sharePackedQuote(project())
+}
+
+function shareProjectWhatsApp(id) {
   if (shareBusy) return
+  const prevId = state.activeProjectId
+  const prevTab = tab
+  state.activeProjectId = id
+  tab = 'orcamento'
+  recalc()
+  sharePackedQuote(project(), {
+    whatsapp: true,
+    after: () => {
+      state.activeProjectId = prevId
+      tab = prevTab
+      recalc()
+      render()
+    }
+  })
+}
+
+function sharePackedQuote(p, opts = {}) {
+  if (shareBusy || !p) return
   shareBusy = true
   const overlay = document.createElement('div')
   overlay.className = 'capturing-overlay'
   overlay.textContent = 'Gerando PDF…'
   document.body.append(overlay)
-  const p = project()
-  const totals = projectSaleTotals()
+  const totals = p.id === state.activeProjectId ? projectSaleTotals() : moneyForProject(p)
   const title = p.name || 'Orçamento'
   const text = `${p.client ? p.client + ' · ' : ''}${formatMoney(totals.sale)}`
+  const digits = clientWaDigits(p)
   const finish = () => {
     shareBusy = false
     overlay.remove()
+    if (opts.after) opts.after()
   }
   buildQuotePdf()
     .then((packed) => {
       const file = packed.file
       const save = () => savePdfFile(packed.blob, packed.filename)
+      const openWa = () => {
+        if (!opts.whatsapp || digits.length < 8) return
+        const msg = `Olá${p.client ? ' ' + p.client : ''}! Segue o orçamento "${title}", no valor de ${formatMoney(totals.sale)}.`
+        window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener')
+      }
       if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         return navigator.share({ title, text, files: [file] }).catch((err) => {
-          if (!err || err.name !== 'AbortError') save()
+          if (!err || err.name !== 'AbortError') {
+            save()
+            openWa()
+          }
         })
       }
       save()
+      openWa()
     })
     .catch(() => {})
     .finally(finish)
@@ -2217,8 +2283,7 @@ function tabsDef() {
     ['orcamento', 'Orçamento'],
     ['custos', 'Custos'],
     ['pecas', 'Peças'],
-    ['corte', 'Corte'],
-    ['conta', 'Conta']
+    ['corte', 'Corte']
   ]
 }
 
@@ -2312,7 +2377,8 @@ function render() {
           h('div', { class: 'tabs', role: 'tablist' }, tabsDef().map(([id, label]) =>
             h('button', { class: 'tab' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) }, [label])
           )),
-          h('div', { class: 'actions' }, [...topActions(p), accountMenu()])
+          h('div', { class: 'actions' }, topActions(p)),
+          accountMenu()
         ]),
         h('div', { class: 'content' }, [body]),
         tab === 'orcamento' && !modal ? fabButton() : null,

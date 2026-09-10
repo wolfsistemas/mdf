@@ -128,7 +128,8 @@ textarea {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
   gap: 16px;
   padding: 14px 22px;
   border-bottom: 1px solid var(--line);
@@ -821,7 +822,7 @@ input[type="color"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 4px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -861,19 +862,20 @@ input[type="color"] {
 }
 
 .home-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .home-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(240px, 1fr) auto;
+  gap: 16px 20px;
+  align-items: center;
 }
 
 .home-card.active {
@@ -920,6 +922,39 @@ input[type="color"] {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.home-money {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.home-money label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.home-money strong {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+.home-cost {
+  color: var(--muted);
+}
+
+.home-profit {
+  color: var(--ok);
+}
+
+.home-sale {
+  color: var(--gold-2);
 }
 
 /* ---------- Sidebar ---------- */
@@ -1099,7 +1134,9 @@ input[type="color"] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: 240px;
   max-width: 240px;
+  flex: 0 0 240px;
 }
 
 .top-title strong {
@@ -1118,10 +1155,11 @@ input[type="color"] {
 }
 
 .tabs {
-  flex: 1 1 auto;
-  justify-content: center;
+  flex: 0 0 auto;
+  justify-content: flex-start;
   overflow-x: auto;
   scrollbar-width: none;
+  flex-shrink: 0;
 }
 
 .tabs::-webkit-scrollbar {
@@ -2230,6 +2268,15 @@ td strong.gold {
   .budget-card {
     box-shadow: none;
   }
+  .budget-body {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+  .shot,
+  .shot .svg-frame {
+    width: 100%;
+  }
   .doc-input {
     border-color: transparent !important;
   }
@@ -2302,16 +2349,21 @@ td strong.gold {
 }
 
 /* ajustes finos */
-.topbar {
-  flex-wrap: wrap;
-}
 
 .topbar .tabs {
-  flex: 1 1 200px;
+  flex: 0 0 auto;
 }
 
-.topbar .actions {
+.topbar .actions:empty {
+  display: none;
+}
+
+.topbar .actions:not(:empty) {
   margin-left: auto;
+}
+
+.topbar .actions:not(:empty) + .account-menu {
+  margin-left: 8px;
 }
 
 .editor-card,
@@ -2339,6 +2391,7 @@ td strong.gold {
     gap: 8px;
     padding: 10px 12px;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
   }
 
@@ -2348,6 +2401,7 @@ td strong.gold {
 
   .top-title {
     max-width: none;
+    width: auto;
     flex: 1 1 140px;
     align-self: center;
   }
@@ -2356,10 +2410,24 @@ td strong.gold {
     display: none;
   }
 
+  .account-menu {
+    margin-left: auto;
+    order: 2;
+  }
+
   .topbar .actions {
     width: 100%;
     justify-content: flex-end;
     order: 5;
+    margin-left: 0;
+  }
+
+  .home-card {
+    grid-template-columns: 1fr;
+  }
+
+  .home-card-actions {
+    justify-content: flex-start;
   }
 
   .account-txt {
@@ -2995,6 +3063,22 @@ td strong.gold {
 .pdf-capture .doc-input {
   border-color: transparent !important;
   background: transparent !important;
+}
+
+.pdf-capture .budget-body {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: 1fr;
+}
+
+.pdf-capture .shot,
+.pdf-capture .shot .svg-frame {
+  width: 100%;
+}
+
+.pdf-capture .shot .svg-frame .schematic-svg {
+  width: 100%;
+  height: auto;
 }
 
 .capturing-overlay {
