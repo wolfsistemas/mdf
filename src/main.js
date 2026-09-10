@@ -537,6 +537,15 @@ function hashHasPlanOk() {
   return /[?&]plano=ok(?:&|$)/.test(location.hash || '')
 }
 
+function applyPlanPayload(r) {
+  if (!r) return false
+  if (r.plan) state.settings.plan = r.plan
+  if (r.plan_expires_at) state.settings.planExpiresAt = r.plan_expires_at
+  saveState(state)
+  render()
+  return !isLimitedPlan(currentPlan())
+}
+
 function consumePlanReturn() {
   if (!hashHasPlanOk()) return
   if (!authUser) {
@@ -547,14 +556,19 @@ function consumePlanReturn() {
   }
   history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
   if (!billingConfigured()) return
-  syncSubscription(authUser.id)
-    .then((r) => {
-      if (r.plan) state.settings.plan = r.plan
-      if (r.plan_expires_at) state.settings.planExpiresAt = r.plan_expires_at
-      saveState(state)
-      render()
-    })
-    .catch(() => {})
+  let tries = 0
+  const run = () => {
+    tries += 1
+    syncSubscription(authUser.id)
+      .then((r) => {
+        if (applyPlanPayload(r)) return
+        if (tries < 4) setTimeout(run, 4000)
+      })
+      .catch(() => {
+        if (tries < 4) setTimeout(run, 4000)
+      })
+  }
+  run()
 }
 
 function consumeUpgradeIntent() {
@@ -647,10 +661,7 @@ function upgradeModal() {
     try {
       if (kind === 'sync') {
         const r = await syncSubscription(authUser.id)
-        if (r.plan) state.settings.plan = r.plan
-        if (r.plan_expires_at) state.settings.planExpiresAt = r.plan_expires_at
-        saveState(state)
-        if (!isLimitedPlan(currentPlan())) {
+        if (applyPlanPayload(r) && !isLimitedPlan(currentPlan())) {
           modal = null
           render()
           return

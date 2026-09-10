@@ -135,8 +135,9 @@ Assinatura: Mercado Pago hospedado (`preapproval_plan` + `init_point`).
 O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
 
 1. Rode `supabase/billing.sql` no SQL Editor (projeto que ja tem o schema).
-2. Cole `gas/billing.js` no Apps Script, publique Web app (Execute as: Me,
-   Anyone) e use **Nova versao no mesmo deployment**.
+2. Cole `gas/billing.js` no Apps Script (substitua o arquivo inteiro),
+   publique Web app (Execute as: Me, Anyone) e use **Nova versao no mesmo
+   deployment**. Sem esta cola, Assinar nao abre o Mercado Pago.
 3. Script Properties: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`,
    `PAYMENT_PROVIDER=mp`, `MP_ACCESS_TOKEN`, `PRO_PRICE_CENTS=4900`,
    `ULTRA_PRICE_CENTS=8900`. Em teste: `MP_USE_SANDBOX=true`.
