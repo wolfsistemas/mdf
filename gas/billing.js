@@ -523,7 +523,7 @@ function handleMpPaymentWebhook(paymentId) {
 }
 
 function handleMpPreapprovalWebhook(subId) {
-  if (!subId) throw new Error('Webhook preapproval sem id')
+  if (!subId || subId === '123456') return { ok: true, status: 'ignored' }
   var pre
   try {
     pre = mpFetch('/preapproval/' + encodeURIComponent(subId))
@@ -534,8 +534,8 @@ function handleMpPreapprovalWebhook(subId) {
   var status = String(pre.status || '')
   var userId = resolveUser_(pre.external_reference, pre.preapproval_plan_id, subId)
   if (!userId) {
-    notify('Webhook MP preapproval sem usuário', JSON.stringify(pre, null, 2))
-    throw new Error('Usuário não identificado no preapproval')
+    notify('Webhook MP preapproval sem usuário (ack 200; sync cobre a 1ª cobrança)', JSON.stringify(pre, null, 2))
+    return { ok: true, status: 'no-store' }
   }
   if (status === 'canceled' || status === 'paused') {
     patchProfile_(userId, { mp_subscription_status: status })
@@ -556,7 +556,7 @@ function handleMpPreapprovalWebhook(subId) {
 }
 
 function handleMpAuthorizedPaymentWebhook(authId) {
-  if (!authId) throw new Error('Webhook authorized_payment sem id')
+  if (!authId || authId === '123456') return { ok: true, status: 'ignored' }
   var auth
   try {
     auth = mpFetch('/authorized_payments/' + encodeURIComponent(authId))
@@ -566,8 +566,8 @@ function handleMpAuthorizedPaymentWebhook(authId) {
   }
   var userId = resolveUser_(auth.external_reference, auth.preapproval_plan_id, auth.preapproval_id)
   if (!userId) {
-    notify('Webhook MP authorized_payment sem usuário', JSON.stringify(auth, null, 2))
-    throw new Error('Usuário não identificado no authorized_payment')
+    notify('Webhook MP authorized_payment sem usuário (ack 200)', JSON.stringify(auth, null, 2))
+    return { ok: true, status: 'no-store' }
   }
   return handleMpApprovedPayment('ap:' + authId, {
     external_reference: auth.external_reference || extRef_(userId),

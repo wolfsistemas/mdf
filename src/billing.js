@@ -80,7 +80,7 @@ export function salePlanHref(plan) {
 
 export function billingReturnUrl() {
   const path = location.pathname || '/'
-  return location.origin + path + '#/app?plano=ok'
+  return location.origin + path + '?plano=ok#/app'
 }
 
 function billingPost(action, payload) {

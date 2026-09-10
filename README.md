@@ -149,8 +149,9 @@ O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
 6. Pages: secrets `SUPABASE_URL` e `SUPABASE_ANON_KEY`. `BILLING_URL` e
    opcional (ha fallback no codigo).
 
-Volta do checkout: `#/app?plano=ok` chama `sync_subscription`. Cancelar
-nao corta o mes ja pago.
+Volta do checkout: `?plano=ok#/app` chama `sync_subscription` (ate 4
+tentativas). O webhook do MP pode falhar na 1a vez; o sync e a rede de
+seguranca. Cancelar nao corta o mes ja pago.
 
 Para o build do GitHub Pages incluir a nuvem, adicione os repositorios secrets
 `SUPABASE_URL` e `SUPABASE_ANON_KEY` (Settings -> Secrets and variables) — sem

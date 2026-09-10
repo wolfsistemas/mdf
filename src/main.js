@@ -534,7 +534,7 @@ async function syncAfterLogin() {
 }
 
 function hashHasPlanOk() {
-  return /[?&]plano=ok(?:&|$)/.test(location.hash || '')
+  return /[?&]plano=ok(?:&|$)/.test(location.hash || '') || /[?&]plano=ok(?:&|$)/.test(location.search || '')
 }
 
 function applyPlanPayload(r) {
@@ -550,11 +550,11 @@ function consumePlanReturn() {
   if (!hashHasPlanOk()) return
   if (!authUser) {
     if (cloudConfigured()) return
-    history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+    history.replaceState(null, '', (location.pathname || '/') + '#/app')
     openAuth()
     return
   }
-  history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+  history.replaceState(null, '', (location.pathname || '/') + '#/app')
   if (!billingConfigured()) return
   let tries = 0
   const run = () => {
@@ -574,7 +574,7 @@ function consumePlanReturn() {
 function consumeUpgradeIntent() {
   const m = (location.hash || '').match(/[?&]upgrade=(pro|ultra)(?:&|$)/)
   if (!m) return
-  history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+  history.replaceState(null, '', (location.pathname || '/') + '#/app')
   openUpgrade(
     m[1] === 'ultra'
       ? 'Plano Ultra: veio por peça na inserção e prioridade.'
@@ -2327,7 +2327,7 @@ let appStarted = false
 let currentScreen = null
 
 function showScreen() {
-  const desired = location.hash.startsWith('#/app') ? 'app' : 'landing'
+  const desired = location.hash.startsWith('#/app') || hashHasPlanOk() ? 'app' : 'landing'
   if (currentScreen === desired) {
     if (desired === 'app') {
       consumeUpgradeIntent()
