@@ -12,7 +12,7 @@ import {
   formatMm
 } from './store.js'
 import { nest, summarize, edgeMeters, pieceAreaM2 } from './nesting.js'
-import { exportCsv, exportPdf } from './export.js'
+import { exportCsv, exportPdf, quotePdfBlob, downloadQuotePdf } from './export.js'
 import {
   CATALOG_GROUPS,
   modelMeta,
@@ -35,7 +35,17 @@ import {
   schedulePush
 } from './cloud.js'
 import { landingHTML } from './landing.js'
-import { FREE_PROJECT_LIMIT, planLabel, isLimitedPlan, upgradeHref } from './billing.js'
+import {
+  FREE_PROJECT_LIMIT,
+  PLANS,
+  planLabel,
+  isLimitedPlan,
+  effectivePlan,
+  billingConfigured,
+  subscribePlan,
+  checkoutOnce,
+  syncSubscription
+} from './billing.js'
 import qrcode from 'qrcode-generator'
 qrcode.stringToBytes =
   typeof TextEncoder !== 'undefined'
@@ -58,6 +68,10 @@ let listFocusId = null
 let printFull = false
 let authUser = null
 let syncTimer = null
+let lastSyncAt = 0
+let lastSyncOk = true
+let shareBusy = false
+let tourStep = 0
 const groupOpen = {}
 CATALOG_GROUPS.forEach((g, i) => (groupOpen[g.group] = i === 0))
 
@@ -88,7 +102,27 @@ function persist() {
 function scheduleCloud() {
   if (!cloudConfigured() || !authUser) return
   clearTimeout(syncTimer)
-  syncTimer = setTimeout(() => schedulePush(state), 500)
+  syncTimer = setTimeout(() => {
+    Promise.resolve(schedulePush(state))
+      .then(() => {
+        lastSyncAt = Date.now()
+        lastSyncOk = true
+        const chip = document.querySelector('.cloud-txt span')
+        if (chip) chip.textContent = syncLabel()
+      })
+      .catch(() => {
+        lastSyncOk = false
+      })
+  }, 500)
+}
+function syncLabel() {
+  if (!authUser) return 'Entre ou crie uma conta para sincronizar os orçamentos.'
+  if (!lastSyncAt) return authUser.email || 'Sincronizando…'
+  if (!lastSyncOk) return 'Falha ao salvar. Tente de novo.'
+  const mins = Math.max(0, Math.round((Date.now() - lastSyncAt) / 60000))
+  if (mins < 1) return 'Salvo na nuvem agora'
+  if (mins === 1) return 'Salvo na nuvem há 1 min'
+  return `Salvo na nuvem há ${mins} min`
 }
 function refresh() {
   render()
@@ -411,7 +445,7 @@ function mobileNav() {
 /* ============================== nuvem (Supabase) ============================== */
 
 function currentPlan() {
-  return (state.settings && state.settings.plan) || 'gratis'
+  return effectivePlan(state.settings && state.settings.plan, state.settings && state.settings.planExpiresAt)
 }
 function planLimited() {
   return Boolean(authUser) && isLimitedPlan(currentPlan())
@@ -420,14 +454,14 @@ function guardProjectSlots() {
   if (!planLimited()) return true
   if (state.projects.length >= FREE_PROJECT_LIMIT) {
     openUpgrade(
-      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro os orçamentos são ilimitados.`
+      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro ou Ultra os orçamentos são ilimitados.`
     )
     return false
   }
   return true
 }
-function openUpgrade(message) {
-  modal = { kind: 'upgrade', msg: message || '' }
+function openUpgrade(message, plan) {
+  modal = { kind: 'upgrade', msg: message || '', pick: plan === 'ultra' ? 'ultra' : 'pro' }
   render()
 }
 
@@ -443,7 +477,7 @@ function cloudChip() {
     return h('div', { class: cls }, [
       h('div', { class: 'cloud-txt' }, [
         h('strong', {}, [`Nuvem ativa · Plano ${planLabel(plan)}`]),
-        h('span', {}, [authUser.email || ''])
+        h('span', {}, [syncLabel()])
       ]),
       buttons
     ])
@@ -482,15 +516,57 @@ function applyCloudData(data) {
 async function syncAfterLogin() {
   try {
     const data = await pullState()
+    if (data && data.settings) {
+      state.settings = { ...state.settings, ...data.settings }
+    }
     if (data && data.projects.length) {
       applyCloudData(data)
     } else {
       await schedulePush(state)
     }
+    lastSyncAt = Date.now()
+    lastSyncOk = true
   } catch (err) {
+    lastSyncOk = false
     console.warn('sync', err)
   }
   render()
+}
+
+function hashHasPlanOk() {
+  return /[?&]plano=ok(?:&|$)/.test(location.hash || '')
+}
+
+function consumePlanReturn() {
+  if (!hashHasPlanOk()) return
+  if (!authUser) {
+    if (cloudConfigured()) return
+    history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+    openAuth()
+    return
+  }
+  history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+  if (!billingConfigured()) return
+  syncSubscription(authUser.id)
+    .then((r) => {
+      if (r.plan) state.settings.plan = r.plan
+      if (r.plan_expires_at) state.settings.planExpiresAt = r.plan_expires_at
+      saveState(state)
+      render()
+    })
+    .catch(() => {})
+}
+
+function consumeUpgradeIntent() {
+  const m = (location.hash || '').match(/[?&]upgrade=(pro|ultra)(?:&|$)/)
+  if (!m) return
+  history.replaceState(null, '', (location.pathname || '/') + (location.search || '') + '#/app')
+  openUpgrade(
+    m[1] === 'ultra'
+      ? 'Plano Ultra: veio por peça na inserção e prioridade.'
+      : 'Plano Pro: orçamentos ilimitados, logo e WhatsApp no documento.',
+    m[1]
+  )
 }
 
 function authModal() {
@@ -542,12 +618,71 @@ function authModal() {
 
 function upgradeModal() {
   const m = modal
+  const pick = m.pick === 'ultra' ? 'ultra' : 'pro'
+  const chosen = PLANS[pick]
+  const msgEl = h('div', { class: 'auth-msg' }, [m.payMsg || ''])
+  if (m.payKind) msgEl.className = 'auth-msg ' + m.payKind
+  const selectPick = (id) => {
+    m.pick = id
+    m.payMsg = ''
+    m.payKind = ''
+    render()
+  }
+  const runPay = async (kind) => {
+    const plan = m.pick === 'ultra' ? 'ultra' : 'pro'
+    if (!authUser) {
+      modal = { kind: 'auth' }
+      render()
+      return
+    }
+    if (!billingConfigured()) {
+      m.payMsg = 'Cobrança ainda não está no ar neste site (falta BILLING_URL no build).'
+      m.payKind = 'err'
+      render()
+      return
+    }
+    m.payMsg = kind === 'sync' ? 'Verificando pagamento…' : 'Abrindo o Mercado Pago…'
+    m.payKind = ''
+    render()
+    try {
+      if (kind === 'sync') {
+        const r = await syncSubscription(authUser.id)
+        if (r.plan) state.settings.plan = r.plan
+        if (r.plan_expires_at) state.settings.planExpiresAt = r.plan_expires_at
+        saveState(state)
+        if (!isLimitedPlan(currentPlan())) {
+          modal = null
+          render()
+          return
+        }
+        m.payMsg = 'Ainda não consta. Se você já pagou, aguarde um minuto e tente de novo.'
+        m.payKind = 'err'
+        render()
+        return
+      }
+      const r = kind === 'once' ? await checkoutOnce(authUser.id, plan) : await subscribePlan(authUser.id, plan)
+      if (r && r.url) {
+        location.href = r.url
+        return
+      }
+      throw new Error('Sem link de pagamento.')
+    } catch (err) {
+      m.payMsg = (err && err.message) || 'Não deu para abrir o pagamento.'
+      m.payKind = 'err'
+      render()
+    }
+  }
+  const mp = billingConfigured()
+  const bullets =
+    pick === 'ultra'
+      ? ['Tudo do Pro', 'Veio por peça na inserção', 'Pagar 30 dias avulso', 'Prioridade no suporte']
+      : ['Orçamentos ilimitados', 'Logo e WhatsApp no documento', 'Backup na nuvem', 'Suporte por WhatsApp']
   return h('div', { class: 'modal-backdrop' }, [
     h('div', { class: 'modal auth-modal' }, [
       h('div', { class: 'modal-head' }, [
         h('div', {}, [
-          h('h2', {}, ['Plano Pro do MDF Atelier']),
-          h('span', { class: 'help' }, ['Orçamentos ilimitados para a sua marcenaria.'])
+          h('h2', {}, ['Assinar o MDF Atelier']),
+          h('span', { class: 'help' }, ['Toque no plano e depois em Assinar. O pagamento abre no Mercado Pago.'])
         ]),
         h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
       ]),
@@ -555,28 +690,33 @@ function upgradeModal() {
         h('div', { class: 'auth-box' }, [
           h('p', { class: 'help', style: 'line-height:1.5' }, [m.msg || '']),
           h('div', { class: 'auth-plans' }, [
-            h('div', { class: 'auth-plan hot' }, [
-              h('strong', {}, ['Pro']),
-              h('span', {}, ['R$ 49/mês'])
-            ]),
-            h('div', { class: 'auth-plan' }, [
-              h('strong', {}, ['Premium']),
-              h('span', {}, ['R$ 99/mês'])
-            ])
-          ]),
-          h('ul', { class: 'help', style: 'line-height:1.7;padding-left:16px;margin:0' }, [
-            h('li', {}, ['Orçamentos ilimitados']),
-            h('li', {}, ['Sua logo e seu WhatsApp no documento']),
-            h('li', {}, ['Backup na nuvem e suporte'])
-          ]),
-          h('div', { class: 'row' }, [
             h(
-              'a',
-              { class: 'btn primary', href: upgradeHref('Quero assinar o plano Pro do MDF Atelier.'), target: '_blank', rel: 'noopener' },
-              ['Assinar o Pro']
+              'button',
+              { type: 'button', class: 'auth-plan' + (pick === 'pro' ? ' hot' : ''), onClick: () => selectPick('pro') },
+              [h('strong', {}, [PLANS.pro.label]), h('span', {}, [PLANS.pro.priceLabel])]
             ),
+            h(
+              'button',
+              { type: 'button', class: 'auth-plan' + (pick === 'ultra' ? ' hot' : ''), onClick: () => selectPick('ultra') },
+              [h('strong', {}, [PLANS.ultra.label]), h('span', {}, [PLANS.ultra.priceLabel])]
+            )
+          ]),
+          h(
+            'ul',
+            { class: 'help', style: 'line-height:1.7;padding-left:16px;margin:0' },
+            bullets.map((t) => h('li', {}, [t]))
+          ),
+          msgEl,
+          h('div', { class: 'row' }, [
+            h('button', { class: 'btn primary', onClick: () => runPay('sub') }, [mp ? 'Assinar ' + chosen.label : 'Assinar (aguardando cobrança)']),
             h('button', { class: 'btn', onClick: () => { modal = null; render() } }, ['Agora não'])
-          ])
+          ]),
+          mp
+            ? h('div', { class: 'row' }, [
+                h('button', { class: 'btn ghost', onClick: () => runPay('once') }, ['Pagar 30 dias (avulso)']),
+                h('button', { class: 'btn ghost', onClick: () => runPay('sync') }, ['Já assinei — verificar'])
+              ])
+            : h('p', { class: 'help' }, ['No GitHub Pages a cobrança só abre depois do secret BILLING_URL no workflow.'])
         ])
       ])
     ])
@@ -700,6 +840,91 @@ function itemDims(item) {
   return parts.join(' × ')
 }
 
+function quoteShareItems() {
+  return furnitureList().map((f) => {
+    const s = saleCalc(f)
+    return {
+      code: f.code,
+      name: f.name,
+      qty: s.qty,
+      salePerUnit: s.salePerUnit,
+      lineTotal: s.lineTotal
+    }
+  })
+}
+
+async function shareQuote() {
+  if (shareBusy) return
+  shareBusy = true
+  const p = project()
+  const items = quoteShareItems()
+  const totals = projectSaleTotals()
+  try {
+    const packed = await quotePdfBlob(p, state.settings, items, totals)
+    const file = packed.file
+    const canFiles = !!(navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] }))
+    if (canFiles) {
+      await navigator.share({
+        title: p.name || 'Orçamento',
+        text: `${p.client ? p.client + ' · ' : ''}${formatMoney(totals.sale)}`,
+        files: [file]
+      })
+    } else if (navigator.share) {
+      await navigator.share({
+        title: p.name || 'Orçamento',
+        text: `Orçamento ${p.name || ''}${p.client ? ' — ' + p.client : ''}: ${formatMoney(totals.sale)}`
+      })
+      await downloadQuotePdf(p, state.settings, items, totals)
+    } else {
+      await downloadQuotePdf(p, state.settings, items, totals)
+    }
+  } catch (err) {
+    if (!err || err.name !== 'AbortError') {
+      try {
+        await downloadQuotePdf(p, state.settings, items, totals)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  shareBusy = false
+}
+
+function mobileClientCard(p) {
+  return h('div', { class: 'card client-card' }, [
+    h('h2', {}, ['Cliente deste orçamento']),
+    field(
+      'Nome',
+      h('input', {
+        type: 'text',
+        class: 'doc-input',
+        value: p.client || '',
+        placeholder: 'Nome do cliente',
+        onChange: (e) => updateProject({ client: e.target.value })
+      })
+    ),
+    field(
+      'Telefone',
+      h('input', {
+        type: 'tel',
+        class: 'doc-input',
+        value: p.phone || '',
+        placeholder: '(00) 00000-0000',
+        onChange: (e) => updateProject({ phone: e.target.value })
+      })
+    ),
+    field(
+      'Observações',
+      h('textarea', {
+        class: 'doc-input',
+        value: p.notes || '',
+        placeholder: 'Prazos, forma de pagamento, o que está incluso…',
+        onChange: (e) => updateProject({ notes: e.target.value })
+      })
+    )
+  ])
+}
+
 function mobileOrcamento() {
   const p = project()
   const items = furnitureList()
@@ -710,13 +935,15 @@ function mobileOrcamento() {
       h('div', { class: 'detail-bar' }, [
         h('button', { class: 'btn', onClick: mobileBackList }, ['‹ Todos os itens']),
         h('span', { class: 'help' }, [formatMoney(saleCalc(focus).lineTotal)]),
-        h('button', { class: 'btn primary', title: 'Imprimir ou salvar o orçamento completo em PDF', onClick: printBudget }, ['Imprimir / PDF'])
+        h('button', { class: 'btn', title: 'Enviar o orçamento completo em PDF', onClick: shareQuote }, ['Enviar']),
+        h('button', { class: 'btn primary', title: 'Imprimir ou salvar o orçamento completo em PDF', onClick: printBudget }, ['Imprimir'])
       ]),
       h('div', { class: 'budget-doc' }, [itemPage(focus)])
     ])
   }
   const t = projectSaleTotals()
   return h('div', { class: 'mobile-list' }, [
+    mobileClientCard(p),
     items.length
       ? h('div', { class: 'list-summary' }, [
           h('div', { class: 'ls-stats' }, [
@@ -750,7 +977,13 @@ function mobileOrcamento() {
           h('div', { style: 'margin-top:14px' }, [h('button', { class: 'btn primary', onClick: openModalNew }, ['+ Adicionar móvel'])])
         ]),
     items.length
-      ? h('p', { class: 'help list-tip' }, ['Toque em um item para ver o desenho e a ficha completa. Para enviar tudo de uma vez, use "Imprimir / PDF" no topo.'])
+      ? h('div', { class: 'list-send' }, [
+          h('button', { class: 'btn primary', onClick: shareQuote }, ['Enviar PDF']),
+          h('button', { class: 'btn', onClick: printBudget }, ['Imprimir'])
+        ])
+      : null,
+    items.length
+      ? h('p', { class: 'help list-tip' }, ['Toque em um item para ver o desenho. Enviar PDF manda o orçamento pelo WhatsApp ou baixa o arquivo.'])
       : null
   ])
 }
@@ -864,18 +1097,45 @@ function totalsCard(t, p) {
   ])
 }
 
+function logoSrc() {
+  return (state.settings && state.settings.shopLogo) || import.meta.env.BASE_URL + 'logo.png'
+}
+
 function docLogoMark(cls) {
   const mark = h('div', { class: 'mark' }, ['MDF ATELIER'])
-  const img = h('img', { class: 'logo-img', src: import.meta.env.BASE_URL + 'logo.png', alt: '' })
-  img.style.display = 'none'
+  const custom = state.settings && state.settings.shopLogo
+  const img = h('img', { class: 'logo-img', src: logoSrc(), alt: '' })
+  if (!custom) img.style.display = 'none'
   img.addEventListener('load', () => {
     img.style.display = 'block'
     mark.style.display = 'none'
   })
   img.addEventListener('error', () => {
     img.remove()
+    mark.style.display = ''
   })
   return h('div', { class: 'logo-slot' + (cls ? ' ' + cls : '') }, [mark, img])
+}
+
+function onLogoFile(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  if (file.size > 800000) {
+    window.alert('Use uma imagem de até 800 KB.')
+    e.target.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    state.settings.shopLogo = String(reader.result || '')
+    persist()
+  }
+  reader.readAsDataURL(file)
+}
+
+function clearShopLogo() {
+  state.settings.shopLogo = ''
+  persist()
 }
 
 function waDigits() {
@@ -1375,9 +1635,44 @@ function extraPiecesHead(item) {
 }
 
 function extraPiecesBody(item) {
-  return (item.extraPieces || []).length
-    ? h('div', { style: 'overflow:auto;margin-top:10px' }, [pieceTable(item)])
-    : h('p', { class: 'help', style: 'margin:10px 0 0' }, ['Use para complementos que o modelo não gera (ex.: cimalha, rodapé, nicho avulso).'])
+  if (!(item.extraPieces || []).length) {
+    return h('p', { class: 'help', style: 'margin:10px 0 0' }, ['Use para complementos que o modelo não gera (ex.: cimalha, rodapé, nicho avulso).'])
+  }
+  if (isMobileNow()) return extraPiecesCards(item)
+  return h('div', { style: 'overflow:auto;margin-top:10px' }, [pieceTable(item)])
+}
+
+function extraPiecesCards(item) {
+  return h(
+    'div',
+    { class: 'extra-cards' },
+    (item.extraPieces || []).map((piece) =>
+      h('div', { class: 'extra-card' }, [
+        field('Nome', h('input', { type: 'text', value: piece.name, onChange: (e) => updateExtra(item, piece.id, { name: e.target.value }) }), 'grow'),
+        h('div', { class: 'row' }, [
+          field('L mm', inputNum(piece.length, (v) => updateExtra(item, piece.id, { length: v }))),
+          field('A mm', inputNum(piece.width, (v) => updateExtra(item, piece.id, { width: v }))),
+          field('Esp.', inputNum(piece.thickness, (v) => updateExtra(item, piece.id, { thickness: v }))),
+          field('Qtd', inputNum(piece.qty, (v) => updateExtra(item, piece.id, { qty: v })))
+        ]),
+        field(
+          'Veio',
+          h(
+            'select',
+            { onChange: (e) => updateExtra(item, piece.id, { grain: e.target.value }) },
+            Object.entries(GRAIN).map(([k, label]) => h('option', { value: k, selected: piece.grain === k }, [label]))
+          )
+        ),
+        h('div', { class: 'edges' }, [
+          extraEdge(item, piece, 'front', 'Frente'),
+          extraEdge(item, piece, 'back', 'Fundo'),
+          extraEdge(item, piece, 'left', 'Esq.'),
+          extraEdge(item, piece, 'right', 'Dir.')
+        ]),
+        h('button', { class: 'btn danger', onClick: () => removeExtra(item, piece.id) }, ['Remover peça'])
+      ])
+    )
+  )
 }
 
 function extraPiecesBlock(item) {
@@ -1650,22 +1945,40 @@ function tabPecas() {
 function tabCorte() {
   const layout = layoutCache
   const s = state.settings
+  const mobile = isMobileNow()
+  const summary = h('div', { class: 'card' }, [
+    h('h2', {}, ['Plano de corte do projeto']),
+    h('p', { class: 'help' }, [
+      layout.sheetsNeeded
+        ? `${layout.sheetsNeeded} chapa(s) · aproveitamento ${layout.efficiency.toFixed(1)}% · modo ${s.cutMode === 'free' ? 'nesting livre' : 'serra / guilhotina'} · kerf ${s.kerf} mm. Cores = móvel.`
+        : 'Adicione móveis para gerar o nesting.'
+    ]),
+    mobile
+      ? h('p', { class: 'help' }, ['No celular mostramos o resumo. Para o plano de impressão completo, use o computador ou o botão "PDF plano".'])
+      : null,
+    legend(),
+    layout.unplaced.length
+      ? h('p', { class: 'unplaced' }, [
+          `${layout.unplaced.length} peça(s) não cabem na chapa: ${layout.unplaced.map((x) => `[${x.furnitureCode}] ${x.name}`).join(', ')}`
+        ])
+      : null
+  ])
+  if (mobile) {
+    const boards = (layout.boards || []).map((board) =>
+      h('div', { class: 'cut-board-row' }, [
+        h('strong', {}, [`Chapa ${board.index}`]),
+        h('span', {}, [`${board.placements.length} peças · ${board.efficiency.toFixed(1)}%`])
+      ])
+    )
+    return h('div', {}, [
+      kpis(),
+      summary,
+      h('div', { class: 'card' }, boards.length ? boards : [h('p', { class: 'help' }, ['Nenhuma chapa gerada.'])])
+    ])
+  }
   return h('div', {}, [
     kpis(),
-    h('div', { class: 'card' }, [
-      h('h2', {}, ['Plano de corte do projeto']),
-      h('p', { class: 'help' }, [
-        layout.sheetsNeeded
-          ? `${layout.sheetsNeeded} chapa(s) · aproveitamento ${layout.efficiency.toFixed(1)}% · modo ${s.cutMode === 'free' ? 'nesting livre' : 'serra / guilhotina'} · kerf ${s.kerf} mm. Cores = móvel.`
-          : 'Adicione móveis para gerar o nesting.'
-      ]),
-      legend(),
-      layout.unplaced.length
-        ? h('p', { class: 'unplaced' }, [
-            `${layout.unplaced.length} peça(s) não cabem na chapa: ${layout.unplaced.map((x) => `[${x.furnitureCode}] ${x.name}`).join(', ')}`
-          ])
-        : null
-    ]),
+    summary,
     h(
       'div',
       { class: 'sheet-wrap' },
@@ -1736,6 +2049,18 @@ function tabConfig() {
         field('Nome da empresa (no orçamento)', text(s.shopName || '', (v) => set({ shopName: v })), 'grow'),
         field('Telefone / WhatsApp', text(s.shopPhone || '', (v) => set({ shopPhone: v })))
       ]),
+      h('div', { class: 'logo-config' }, [
+        field(
+          'Logo da marcenaria',
+          h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', onChange: onLogoFile })
+        ),
+        s.shopLogo
+          ? h('div', { class: 'logo-preview-row' }, [
+              h('img', { class: 'logo-preview', src: s.shopLogo, alt: 'Logo atual' }),
+              h('button', { class: 'btn small ghost', onClick: clearShopLogo }, ['Remover logo'])
+            ])
+          : h('p', { class: 'help' }, ['A logo aparece na capa e no rodapé do orçamento. Sem arquivo, usamos o monograma.'])
+      ]),
       h('div', { class: 'row', style: 'margin-top:10px' }, [
         field('Margem padrão sobre o custo %', inputNum(s.defaultMargin ?? 100, (v) => set({ defaultMargin: v }), { step: '5' }), 'grow'),
         field('% extra (mão de obra)', inputNum(s.laborPercent || 0, (v) => set({ laborPercent: v }), { step: '0.5' }))
@@ -1798,6 +2123,7 @@ function topActions(p) {
   const btns = [h('button', { class: 'btn', title: 'Baixar CSV com todas as peças do projeto', onClick: () => exportCsv(p, piecesCache) }, ['CSV peças'])]
   if (tab === 'orcamento') {
     btns.unshift(
+      h('button', { class: 'btn', title: 'Enviar o orçamento em PDF', onClick: shareQuote }, ['Enviar PDF']),
       h('button', { class: 'btn primary', title: 'Imprimir ou salvar em PDF o orçamento do cliente', onClick: printBudget }, ['Imprimir / PDF']),
       h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano'])
     )
@@ -1885,6 +2211,8 @@ function render() {
       ])
     ])
   )
+  const tour = printFull ? null : tourOverlay()
+  if (tour) root.append(tour)
   if (modal) {
     root.append(
       modal.kind === 'pick'
@@ -1916,11 +2244,72 @@ function render() {
     const nb = root.querySelector('.modal-body')
     if (nb) nb.scrollTop = modalScrollTop
   }
-  document.body.style.overflow = modal ? 'hidden' : ''
+  document.body.style.overflow = modal || tour ? 'hidden' : ''
 }
 
 function fabButton() {
   return h('button', { class: 'fab', onClick: openModalNew, title: 'Adicionar móvel ao orçamento' }, ['+'])
+}
+
+const TOUR_KEY = 'mdf-atelier-tour-v1'
+const TOUR_STEPS = [
+  {
+    title: 'Cliente na hora',
+    body: 'No celular, o nome, o telefone e as observações ficam no topo do orçamento. Preencha antes de enviar.'
+  },
+  {
+    title: 'Monte o móvel em 4 passos',
+    body: 'Toque no + para escolher o modelo. Medidas, acabamento, peças extras e revisão — um passo de cada vez.'
+  },
+  {
+    title: 'Envie o PDF',
+    body: 'Use Enviar PDF para mandar o orçamento pelo WhatsApp, ou Imprimir para gerar o documento completo.'
+  }
+]
+
+function tourSeen() {
+  try {
+    return localStorage.getItem(TOUR_KEY) === '1'
+  } catch {
+    return true
+  }
+}
+function markTourSeen() {
+  try {
+    localStorage.setItem(TOUR_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+  tourStep = 0
+  refresh()
+}
+function maybeStartTour() {
+  if (tourSeen()) return
+  if (tourStep < 1) tourStep = 1
+}
+function tourOverlay() {
+  if (!tourStep || tourSeen()) return null
+  const i = Math.min(TOUR_STEPS.length, Math.max(1, tourStep)) - 1
+  const step = TOUR_STEPS[i]
+  const last = i === TOUR_STEPS.length - 1
+  return h('div', { class: 'tour-backdrop', onClick: (e) => e.target === e.currentTarget && markTourSeen() }, [
+    h('div', { class: 'tour-card' }, [
+      h('span', { class: 'help' }, [`${i + 1} / ${TOUR_STEPS.length}`]),
+      h('h2', {}, [step.title]),
+      h('p', {}, [step.body]),
+      h('div', { class: 'row' }, [
+        h('button', { class: 'btn ghost', onClick: markTourSeen }, ['Pular']),
+        last
+          ? h('button', { class: 'btn primary', onClick: markTourSeen }, ['Começar'])
+          : h('button', { class: 'btn primary', onClick: () => { tourStep = i + 2; refresh() } }, ['Próximo'])
+      ])
+    ])
+  ])
+}
+
+function registerPwa() {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
+  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(() => {})
 }
 
 let appStarted = false
@@ -1928,7 +2317,13 @@ let currentScreen = null
 
 function showScreen() {
   const desired = location.hash.startsWith('#/app') ? 'app' : 'landing'
-  if (currentScreen === desired) return
+  if (currentScreen === desired) {
+    if (desired === 'app') {
+      consumeUpgradeIntent()
+      consumePlanReturn()
+    }
+    return
+  }
   currentScreen = desired
   const root = document.getElementById('app')
   document.body.style.overflow = ''
@@ -1936,19 +2331,27 @@ function showScreen() {
     document.body.classList.remove('landing-mode')
     if (!appStarted) {
       appStarted = true
+      maybeStartTour()
+      registerPwa()
       recalc()
       render()
+      consumeUpgradeIntent()
       if (cloudConfigured()) {
         setAuthListener((u) => {
           authUser = u
-          if (u) syncAfterLogin()
-          else render()
+          if (u) {
+            syncAfterLogin().then(() => consumePlanReturn())
+          } else render()
         })
         cloudInit()
+      } else {
+        consumePlanReturn()
       }
     } else {
       recalc()
       render()
+      consumeUpgradeIntent()
+      consumePlanReturn()
     }
   } else {
     document.body.classList.add('landing-mode')

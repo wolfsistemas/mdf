@@ -1,15 +1,5 @@
 import './landing.css'
 
-// Preencha com seu WhatsApp comercial (formato 55DDDNUMBER) para o CTA dos
-// planos Pro/Premium abrir conversa. Vazio = CTA leva para o app.
-const WHATSAPP = ''
-
-function wa(plan) {
-  if (!WHATSAPP) return '#/app'
-  const msg = encodeURIComponent(`Olá! Quero o plano ${plan} do MDF Atelier.`)
-  return `https://wa.me/${WHATSAPP}?text=${msg}`
-}
-
 const CABINET_SVG = `
 <svg viewBox="0 0 220 260" xmlns="http://www.w3.org/2000/svg">
   <rect x="6" y="6" width="208" height="248" rx="10" fill="#f3ece3" stroke="#e4dccd" stroke-width="2"/>
@@ -165,19 +155,18 @@ export function landingHTML() {
             <li>Backup na nuvem</li>
             <li>Suporte por WhatsApp</li>
           </ul>
-          <a class="btn-l primary full" href="${wa('Pro')}">Quero o Pro</a>
+          <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
         </div>
         <div class="lplan">
-          <h3>Premium</h3>
-          <p class="lprice">R$ 99<span>/mês</span></p>
+          <h3>Ultra</h3>
+          <p class="lprice">R$ 89<span>/mês</span></p>
           <ul>
             <li>Tudo do Pro</li>
-            <li>Até 5 usuários na oficina</li>
-            <li>Configuração e treinamento</li>
+            <li>Veio por peça na inserção</li>
+            <li>Pagar 30 dias avulso</li>
             <li>Prioridade no suporte</li>
-            <li>Consultoria de precificação</li>
           </ul>
-          <a class="btn-l outline full" href="${wa('Premium')}">Falar com a gente</a>
+          <a class="btn-l outline full" href="#/app?upgrade=ultra">Quero o Ultra</a>
         </div>
       </div>
       <p class="lpricing-note">Pagamento recorrente. Cancele quando quiser. O plano Grátis não precisa de cartão.</p>
@@ -197,7 +186,7 @@ export function landingHTML() {
       </details>
       <details>
         <summary>Consigo usar minha própria logo e meu WhatsApp?</summary>
-        <p>Sim, nos planos Pro e Premium. O orçamento sai com a sua marca, seu número e QR code que abre a conversa já preenchida.</p>
+        <p>Sim, nos planos Pro e Ultra. O orçamento sai com a sua marca, seu número e QR code que abre a conversa já preenchida.</p>
       </details>
       <details>
         <summary>Os cálculos de chapa e sobra são confiáveis?</summary>

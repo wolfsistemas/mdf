@@ -52,9 +52,23 @@ Tudo em milimetros. Preco da chapa e da fita em reais, editavel em Config, junto
 
 ## Logo do orcamento
 
-Coloque o arquivo `public/logo.png` para o documento de orcamento mostrar a logo
-no cabecalho e no rodape (veja `public/README.md`). Enquanto o arquivo nao existir,
-o documento usa o monograma de texto e a impressao continua normal.
+Na aba **Config** da oficina, envie a logo da marcenaria (PNG/JPEG/WebP, ate
+800 KB). Ela fica salva nas configuracoes e aparece na capa e no rodape do
+orcamento. Sem logo, o documento usa o monograma de texto.
+
+Tambem e possivel deixar um `public/logo.png` de fallback (veja
+`public/README.md`).
+
+## Celular, envio e PWA
+
+No smartphone (ate 900 px) o orcamento abre em lista: cliente, itens e total.
+**Enviar PDF** usa o compartilhamento nativo (WhatsApp, e-mail) quando o
+navegador permite; senao baixa o arquivo. **Imprimir** monta o documento
+completo. A aba Corte mostra o resumo das chapas; o plano desenhado fica no
+computador ou no PDF plano.
+
+O app registra um service worker e um manifest (`start_url` em `/#/app`) para
+abrir em tela cheia a partir da tela inicial.
 
 ## Publicar no GitHub Pages (teste)
 
@@ -83,9 +97,10 @@ A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, planos e FAQ; o
 app fica em `/mdf/#/app` (botao "Abrir o app" / "Testar gratis").
 
 Textos, precos e planos ficam em `src/landing.js` e o visual em
-`src/landing.css`. Para o CTA dos planos Pro/Premium abrir conversa no
-WhatsApp, preencha a constante `WHATSAPP` no topo de `src/landing.js`
-(formato `55DDDNUMBER`). Enquanto vazio, os botoes levam para o app.
+`src/landing.css`. O WhatsApp comercial e o link de assinatura ficam
+unificados em `src/billing.js` (`SALE.whatsapp` / `SALE.url`) e valem
+para a landing e para o modal de upgrade do app. Enquanto os dois
+estiverem vazios, os CTAs levam para o app.
 
 ## Nuvem com Supabase (para vender / varios clientes)
 
@@ -109,25 +124,30 @@ Depois de rodar o schema, use o botao **Backup na nuvem** (barra lateral) do
 app para criar a conta e sincronizar. Primeiro login com a conta vazia envia os
 dados do navegador para a nuvem; nas proximas vezes a nuvem e a fonte dos dados.
 
-### Planos (limite Gratis x Pro)
+### Planos (Gratis / Pro / Ultra)
 
-Contas novas entram no **plano Gratis**: ate 3 orcamentos ativos. Ao tentar
-criar mais, o app abre a tela de upgrade. `src/billing.js` concentra a
-configuracao comercial:
+Contas novas entram no **Gratis**: ate 3 orcamentos ativos. Pro (R$ 49/mes)
+e Ultra (R$ 89/mes) sao ilimitados. O plano efetivo vem das colunas
+`profiles.plan` e `profiles.plan_expires_at` (o cliente autenticado nao
+consegue se promover). Sem login (demo local) nao ha limite.
 
-- `SALE.url` = link de assinatura (Mercado Pago/Stripe) quando existir.
-- `SALE.whatsapp` = WhatsApp comercial usado enquanto nao houver `url`.
-- `FREE_PROJECT_LIMIT` = limite do Gratis (padrao 3).
+Assinatura: Mercado Pago hospedado (`preapproval_plan` + `init_point`).
+O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
 
-Sem login (modo local/demo) nao ha limite. Para liberar uma conta para Pro,
-rode no SQL Editor (ajuste o id):
+1. Rode `supabase/billing.sql` no SQL Editor (projeto que ja tem o schema).
+2. Cole `gas/billing.js` no Apps Script, publique Web app (Execute as: Me,
+   Anyone) e use **Nova versao no mesmo deployment**.
+3. Script Properties: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`,
+   `PAYMENT_PROVIDER=mp`, `MP_ACCESS_TOKEN`, `PRO_PRICE_CENTS=4900`,
+   `ULTRA_PRICE_CENTS=8900`. Em teste: `MP_USE_SANDBOX=true`.
+4. Painel MP → Webhooks na URL do GAS: eventos de Planos e assinaturas +
+   `payment` (modo teste e, depois, producao).
+5. `.env`: `VITE_BILLING_URL` = URL `/exec` do GAS. Sem isto o app esconde
+   Assinar e cai no WhatsApp (`SALE.whatsapp`) se estiver preenchido.
+6. Pages: secret `BILLING_URL` alem de `SUPABASE_URL` / `SUPABASE_ANON_KEY`.
 
-```sql
-select id, email from auth.users;
-update public.profiles
-set settings = settings || '{"plan":"pro"}'::jsonb
-where id = '<ID-DO-USUARIO>';
-```
+Volta do checkout: `#/app?plano=ok` chama `sync_subscription`. Cancelar
+nao corta o mes ja pago.
 
 Para o build do GitHub Pages incluir a nuvem, adicione os repositorios secrets
 `SUPABASE_URL` e `SUPABASE_ANON_KEY` (Settings -> Secrets and variables) — sem

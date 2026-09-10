@@ -32,7 +32,8 @@ export function defaultSettings() {
     laborPercent: 0,
     defaultMargin: 100,
     shopName: 'MDF Atelier',
-    shopPhone: ''
+    shopPhone: '',
+    shopLogo: ''
   }
 }
 

@@ -33,11 +33,21 @@ end $$;
 -- profiles — 1 linha por usuário do auth
 -- ----------------------------------------------------------------------------
 create table if not exists public.profiles (
-  id                uuid primary key references auth.users (id) on delete cascade,
-  settings          jsonb not null default '{}'::jsonb,
-  active_project_id text,
-  created_at        timestamptz not null default now()
+  id                     uuid primary key references auth.users (id) on delete cascade,
+  settings               jsonb not null default '{}'::jsonb,
+  active_project_id      text,
+  plan                   text not null default 'gratis'
+                         check (plan in ('gratis', 'pro', 'ultra')),
+  plan_expires_at        timestamptz,
+  mp_subscription_id     text,
+  mp_subscription_status text,
+  mp_plan_id             text,
+  created_at             timestamptz not null default now()
 );
+
+create index if not exists profiles_mp_plan_id_idx
+  on public.profiles (mp_plan_id)
+  where mp_plan_id is not null;
 
 -- settings default igual ao do app (defaultSettings em store.js)
 create or replace function public.default_settings()
@@ -128,3 +138,22 @@ create policy projects_update_own on public.projects
 drop policy if exists projects_delete_own on public.projects;
 create policy projects_delete_own on public.projects
   for delete using (auth.uid() = user_id);
+
+-- Cobrança: o cliente autenticado não se promove. Só o GAS (service_role) grava plano.
+create or replace function public.protect_billing_columns()
+returns trigger language plpgsql as $$
+begin
+  if auth.role() = 'authenticated' then
+    new.plan := old.plan;
+    new.plan_expires_at := old.plan_expires_at;
+    new.mp_subscription_id := old.mp_subscription_id;
+    new.mp_subscription_status := old.mp_subscription_status;
+    new.mp_plan_id := old.mp_plan_id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists profiles_protect_billing on public.profiles;
+create trigger profiles_protect_billing
+  before update on public.profiles
+  for each row execute function public.protect_billing_columns();

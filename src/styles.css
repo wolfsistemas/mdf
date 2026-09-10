@@ -953,6 +953,11 @@ input[type="color"] {
   flex-direction: column;
   gap: 2px;
   background: var(--panel-2);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  width: 100%;
 }
 
 .auth-plan.hot {
@@ -971,6 +976,10 @@ input[type="color"] {
 .auth-box a.btn {
   text-decoration: none;
   cursor: pointer;
+}
+
+.auth-box .row {
+  flex-wrap: wrap;
 }
 
 /* ---------- Topbar ---------- */
@@ -2075,7 +2084,11 @@ td strong.gold {
   .topbar,
   .fab,
   .kpis,
-  .print-hide {
+  .print-hide,
+  .mobile-nav,
+  .tour-backdrop,
+  .scrim,
+  .menu-btn {
     display: none !important;
   }
   .app {
@@ -2736,4 +2749,111 @@ td strong.gold {
   .editor-steps .estep {
     min-height: 44px;
   }
+
+  .client-card .field {
+    margin-top: 10px;
+  }
+
+  .client-card textarea {
+    min-height: 72px;
+  }
+
+  .list-send {
+    display: flex;
+    gap: 10px;
+  }
+
+  .list-send .btn {
+    flex: 1;
+    min-height: 48px;
+  }
+
+  .extra-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .extra-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg);
+  }
+
+  .extra-card .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cut-board-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .cut-board-row:last-child {
+    border-bottom: 0;
+  }
+
+  .detail-bar {
+    flex-wrap: wrap;
+  }
+}
+
+.logo-config {
+  margin-top: 12px;
+}
+
+.logo-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.logo-preview {
+  max-height: 52px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(20, 17, 14, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 18px;
+}
+
+.tour-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tour-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.tour-card p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.45;
 }

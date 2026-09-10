@@ -83,9 +83,12 @@ export function schedulePush(state) {
 async function pushState(state) {
   const uid = authUserId()
   if (!uid) return
+  const settings = { ...(state.settings || {}) }
+  delete settings.plan
+  delete settings.planExpiresAt
   await client()
     .from('profiles')
-    .upsert({ id: uid, settings: state.settings, active_project_id: state.activeProjectId || null }, { onConflict: 'id' })
+    .upsert({ id: uid, settings, active_project_id: state.activeProjectId || null }, { onConflict: 'id' })
 
   const rows = (state.projects || []).map((p) => ({
     id: p.id,
@@ -109,7 +112,11 @@ export async function pullState() {
   if (!uid) return null
   const dbc = client()
 
-  const { data: prof } = await dbc.from('profiles').select('settings, active_project_id').eq('id', uid).maybeSingle()
+  const { data: prof } = await dbc
+    .from('profiles')
+    .select('settings, active_project_id, plan, plan_expires_at, mp_subscription_status')
+    .eq('id', uid)
+    .maybeSingle()
   const { data: rows } = await dbc
     .from('projects')
     .select('*')
@@ -117,7 +124,17 @@ export async function pullState() {
     .order('created_at', { ascending: false })
     .order('updated_at', { ascending: false })
 
-  if (!rows || rows.length === 0) return null
+  const settings =
+    prof && prof.settings && Object.keys(prof.settings).length ? { ...prof.settings } : {}
+  if (prof) {
+    settings.plan = prof.plan || settings.plan || 'gratis'
+    settings.planExpiresAt = prof.plan_expires_at || ''
+    settings.mpSubscriptionStatus = prof.mp_subscription_status || ''
+  }
+
+  if (!rows || rows.length === 0) {
+    return { settings, activeProjectId: null, projects: [] }
+  }
 
   const projects = rows.map((r) => ({
     id: r.id,
@@ -130,8 +147,6 @@ export async function pullState() {
     createdAt: new Date(r.created_at).getTime()
   }))
 
-  const settings =
-    prof && prof.settings && Object.keys(prof.settings).length ? prof.settings : null
   const activeProjectId =
     projects.some((p) => p.id === prof?.active_project_id) ? prof.active_project_id : projects[0].id
 
