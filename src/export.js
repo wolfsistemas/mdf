@@ -74,7 +74,7 @@ export function exportPdf(project, settings, layout, summary, pieces) {
   doc.save(slug(project.name) + '-plano-corte.pdf')
 }
 
-export async function quotePdfBlob(project, settings, items, totals) {
+export function quotePdfBlob(project, settings, items, totals) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
@@ -169,13 +169,18 @@ export async function quotePdfBlob(project, settings, items, totals) {
 
   const blob = doc.output('blob')
   const filename = slug(project.name) + '-orcamento.pdf'
-  return { blob, filename, file: new File([blob], filename, { type: 'application/pdf' }) }
+  let file = null
+  try {
+    file = new File([blob], filename, { type: 'application/pdf' })
+  } catch {
+    file = null
+  }
+  return { blob, filename, file }
 }
 
 export function downloadQuotePdf(project, settings, items, totals) {
-  return quotePdfBlob(project, settings, items, totals).then(({ blob, filename }) => {
-    download(blob, filename)
-  })
+  const { blob, filename } = quotePdfBlob(project, settings, items, totals)
+  download(blob, filename)
 }
 
 function coverPage(doc, project, settings, summary, pageW, pageH, margin) {
@@ -318,6 +323,8 @@ function partsPage(doc, pieces, pageW, pageH, margin) {
       doc.rect(0, 0, pageW, pageH, 'F')
       heading(doc, 'Lista de peças (cont.)', margin)
       y = 28
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
     }
     if (i % 2 === 0) {
       doc.setFillColor(237, 230, 218)

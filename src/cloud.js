@@ -11,6 +11,7 @@ let db = null
 let user = null
 let listener = null
 let chain = Promise.resolve()
+let signingOut = false
 
 function client() {
   if (!db) db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -34,6 +35,10 @@ export async function init() {
   const { data } = await client().auth.getSession()
   user = data.session?.user || null
   client().auth.onAuthStateChange((_event, session) => {
+    if (signingOut) {
+      user = null
+      return
+    }
     const next = session?.user || null
     if (next?.id !== user?.id) {
       user = next
@@ -62,9 +67,13 @@ export async function signUp(email, password) {
 }
 
 export async function signOut() {
+  signingOut = true
   user = null
   emit()
   const { error } = await client().auth.signOut()
+  user = null
+  signingOut = false
+  emit()
   return error ? { error: error.message } : { ok: true }
 }
 

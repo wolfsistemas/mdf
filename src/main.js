@@ -23,7 +23,7 @@ import {
   furnitureSummaryLine
 } from './catalog.js'
 import { schematicSvg } from './schematic.js'
-import { saleCalc as calcItemSale, projectTotals as calcProjectTotals, rateioCtx as calcRateioCtx } from './pricing.js'
+import { saleCalc as calcItemSale, projectTotals as calcProjectTotals, rateioCtx as calcRateioCtx, panelPricePerM2, sheetAreaM2 } from './pricing.js'
 import {
   isConfigured as cloudConfigured,
   init as cloudInit,
@@ -193,6 +193,12 @@ function updateProject(patch) {
   persist()
 }
 
+function liveProject(patch) {
+  Object.assign(project(), patch)
+  saveState(state)
+  scheduleCloud()
+}
+
 function updateFurniture(id, patch) {
   const item = mutableItem(id)
   if (!item) return
@@ -338,7 +344,9 @@ let focusSeq = 0
 
 function h(tag, attrs = {}, children = []) {
   const el = document.createElement(tag)
-  if (tag === 'input' || tag === 'select' || tag === 'textarea') el.dataset.k = 'k' + ++focusSeq
+  if ((tag === 'input' || tag === 'select' || tag === 'textarea') && attrs['data-k'] == null) {
+    el.dataset.k = 'k' + ++focusSeq
+  }
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') el.className = v
     else if (k === 'html') el.innerHTML = v
@@ -448,7 +456,8 @@ function currentPlan() {
   return effectivePlan(state.settings && state.settings.plan, state.settings && state.settings.planExpiresAt)
 }
 function planLimited() {
-  return Boolean(authUser) && isLimitedPlan(currentPlan())
+  if (!authUser) return true
+  return isLimitedPlan(currentPlan())
 }
 function guardProjectSlots() {
   if (!planLimited()) return true
@@ -496,11 +505,19 @@ function openAuth() {
   render()
 }
 
+function clearLocalPlan() {
+  state.settings.plan = 'gratis'
+  state.settings.planExpiresAt = ''
+  saveState(state)
+}
+
 async function cloudLogout() {
+  clearLocalPlan()
+  authUser = null
+  modal = null
   const r = await cloudSignOut()
   if (r.error) console.warn(r.error)
   authUser = null
-  modal = null
   render()
 }
 
@@ -584,8 +601,28 @@ function consumeUpgradeIntent() {
 }
 
 function authModal() {
-  const email = h('input', { type: 'email', class: 'doc-input', placeholder: 'voce@marcenaria.com' })
-  const pass = h('input', { type: 'password', class: 'doc-input', placeholder: 'senha' })
+  const email = h('input', {
+    type: 'email',
+    name: 'email',
+    class: 'doc-input',
+    placeholder: 'voce@marcenaria.com',
+    autocomplete: 'username',
+    inputmode: 'email',
+    enterkeyhint: 'next',
+    autocapitalize: 'off',
+    autocorrect: 'off',
+    spellcheck: 'false',
+    'data-k': 'auth-email'
+  })
+  const pass = h('input', {
+    type: 'password',
+    name: 'password',
+    class: 'doc-input',
+    placeholder: 'senha',
+    autocomplete: 'current-password',
+    enterkeyhint: 'done',
+    'data-k': 'auth-pass'
+  })
   const msgEl = h('div', { class: 'auth-msg' }, [])
   const setMsg = (text, kind) => {
     msgEl.textContent = text || ''
@@ -613,13 +650,20 @@ function authModal() {
         h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
       ]),
       h('div', { class: 'modal-body' }, [
-        h('div', { class: 'auth-box' }, [
+        h('form', {
+          class: 'auth-box',
+          autocomplete: 'on',
+          onSubmit: (e) => {
+            e.preventDefault()
+            run('in')
+          }
+        }, [
           field('E-mail', email),
           field('Senha', pass),
           msgEl,
           h('div', { class: 'row' }, [
-            h('button', { class: 'btn primary', onClick: () => run('in') }, ['Entrar']),
-            h('button', { class: 'btn', onClick: () => run('up') }, ['Criar conta'])
+            h('button', { type: 'submit', class: 'btn primary' }, ['Entrar']),
+            h('button', { type: 'button', class: 'btn', onClick: () => run('up') }, ['Criar conta'])
           ]),
           h('p', { class: 'help', style: 'line-height:1.45' }, [
             'Primeira vez: crie uma conta. No primeiro login, os dados deste navegador são enviados para a sua conta.'
@@ -864,41 +908,57 @@ function quoteShareItems() {
   })
 }
 
-async function shareQuote() {
+function shareQuote() {
   if (shareBusy) return
   shareBusy = true
   const p = project()
   const items = quoteShareItems()
   const totals = projectSaleTotals()
-  try {
-    const packed = await quotePdfBlob(p, state.settings, items, totals)
-    const file = packed.file
-    const canFiles = !!(navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] }))
-    if (canFiles) {
-      await navigator.share({
-        title: p.name || 'Orçamento',
-        text: `${p.client ? p.client + ' · ' : ''}${formatMoney(totals.sale)}`,
-        files: [file]
-      })
-    } else if (navigator.share) {
-      await navigator.share({
-        title: p.name || 'Orçamento',
-        text: `Orçamento ${p.name || ''}${p.client ? ' — ' + p.client : ''}: ${formatMoney(totals.sale)}`
-      })
-      await downloadQuotePdf(p, state.settings, items, totals)
-    } else {
-      await downloadQuotePdf(p, state.settings, items, totals)
-    }
-  } catch (err) {
-    if (!err || err.name !== 'AbortError') {
-      try {
-        await downloadQuotePdf(p, state.settings, items, totals)
-      } catch {
-        /* ignore */
-      }
-    }
+  const done = () => {
+    shareBusy = false
   }
-  shareBusy = false
+  let packed
+  try {
+    packed = quotePdfBlob(p, state.settings, items, totals)
+  } catch {
+    done()
+    return
+  }
+  const file = packed.file
+  const title = p.name || 'Orçamento'
+  const text = `${p.client ? p.client + ' · ' : ''}${formatMoney(totals.sale)}`
+  const fallback = () => {
+    downloadQuotePdf(p, state.settings, items, totals)
+    done()
+  }
+  try {
+    if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator
+        .share({ title, text, files: [file] })
+        .then(done)
+        .catch((err) => {
+          if (err && err.name === 'AbortError') done()
+          else fallback()
+        })
+      return
+    }
+    if (navigator.share) {
+      navigator
+        .share({
+          title,
+          text: `Orçamento ${p.name || ''}${p.client ? ' — ' + p.client : ''}: ${formatMoney(totals.sale)}`
+        })
+        .then(() => fallback())
+        .catch((err) => {
+          if (err && err.name === 'AbortError') done()
+          else fallback()
+        })
+      return
+    }
+    fallback()
+  } catch {
+    fallback()
+  }
 }
 
 function mobileClientCard(p) {
@@ -911,7 +971,10 @@ function mobileClientCard(p) {
         class: 'doc-input',
         value: p.client || '',
         placeholder: 'Nome do cliente',
-        onChange: (e) => updateProject({ client: e.target.value })
+        autocomplete: 'name',
+        enterkeyhint: 'next',
+        'data-k': 'client-name',
+        onInput: (e) => liveProject({ client: e.target.value })
       })
     ),
     field(
@@ -921,7 +984,11 @@ function mobileClientCard(p) {
         class: 'doc-input',
         value: p.phone || '',
         placeholder: '(00) 00000-0000',
-        onChange: (e) => updateProject({ phone: e.target.value })
+        autocomplete: 'tel',
+        inputmode: 'tel',
+        enterkeyhint: 'next',
+        'data-k': 'client-phone',
+        onInput: (e) => liveProject({ phone: e.target.value })
       })
     ),
     field(
@@ -930,7 +997,8 @@ function mobileClientCard(p) {
         class: 'doc-input',
         value: p.notes || '',
         placeholder: 'Prazos, forma de pagamento, o que está incluso…',
-        onChange: (e) => updateProject({ notes: e.target.value })
+        'data-k': 'client-notes',
+        onInput: (e) => liveProject({ notes: e.target.value })
       })
     )
   ])
@@ -2092,6 +2160,9 @@ function tabConfig() {
         field('Espessura mm', inputNum(s.sheetThickness, (v) => set({ sheetThickness: v }))),
         field('Preço da chapa', inputNum(s.sheetPrice, (v) => set({ sheetPrice: v }), { step: '0.01' }))
       ]),
+      h('p', { class: 'help' }, [
+        `Área da chapa: ${formatM2(sheetAreaM2(s))} · média ${formatMoney(panelPricePerM2(s))}/m² (preço da chapa ÷ área).`
+      ]),
       h('div', { class: 'row', style: 'margin-top:10px' }, [
         field('Kerf (serra) mm', inputNum(s.kerf, (v) => set({ kerf: v }), { step: '0.1' })),
         field('Refilo mm', inputNum(s.trim, (v) => set({ trim: v }))),
@@ -2170,6 +2241,7 @@ function printBudget() {
 }
 
 function render() {
+  focusSeq = 0
   const root = document.getElementById('app')
   const scroller = document.scrollingElement || document.documentElement
   const scrollTop = scroller.scrollTop
@@ -2177,7 +2249,7 @@ function render() {
   const prevTag = prevActive ? prevActive.tagName : ''
   const isEdit = prevTag === 'INPUT' || prevTag === 'SELECT' || prevTag === 'TEXTAREA'
   const prevKey = isEdit && prevActive.getAttribute ? prevActive.getAttribute('data-k') : null
-  const prevSel = isEdit && prevTag === 'INPUT' ? prevActive.selectionStart : null
+  const prevSel = isEdit && (prevTag === 'INPUT' || prevTag === 'TEXTAREA') ? prevActive.selectionStart : null
   const modalBodyEl = document.querySelector('.modal-body')
   const modalScrollTop = modalBodyEl ? modalBodyEl.scrollTop : 0
   root.innerHTML = ''
@@ -2241,13 +2313,13 @@ function render() {
       const restored = root.querySelector(`[data-k="${prevKey}"]`)
       if (restored) {
         restored.focus()
-        if (prevTag === 'INPUT' && prevSel != null) {
-          try {
-            restored.setSelectionRange(prevSel, prevSel)
-          } catch {
-            /* número sem caret */
+        if ((prevTag === 'INPUT' || prevTag === 'TEXTAREA') && prevSel != null) {
+            try {
+              restored.setSelectionRange(prevSel, prevSel)
+            } catch {
+              /* número sem caret */
+            }
           }
-        }
       }
     }
   }
@@ -2255,7 +2327,7 @@ function render() {
     const nb = root.querySelector('.modal-body')
     if (nb) nb.scrollTop = modalScrollTop
   }
-  document.body.style.overflow = modal || tour ? 'hidden' : ''
+  document.body.style.overflow = tour || (modal && modal.kind !== 'auth') ? 'hidden' : ''
 }
 
 function fabButton() {
@@ -2371,8 +2443,20 @@ function showScreen() {
   }
 }
 
+function syncKbClass() {
+  const t = document.activeElement
+  const on = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
+  document.body.classList.toggle('kb-open', !!on)
+}
+document.addEventListener('focusin', syncKbClass)
+document.addEventListener('focusout', () => setTimeout(syncKbClass, 0))
+
 window.addEventListener('resize', () => {
-  if (currentScreen === 'app' && (tab === 'corte' || tab === 'pecas' || tab === 'orcamento')) render()
+  if (currentScreen !== 'app') return
+  const ae = document.activeElement
+  const tag = ae && ae.tagName
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+  if (tab === 'corte' || tab === 'pecas' || tab === 'orcamento') render()
 })
 window.addEventListener('hashchange', showScreen)
 

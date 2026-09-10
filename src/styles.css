@@ -912,6 +912,7 @@ input[type="color"] {
 
 .auth-modal {
   max-width: 440px;
+  max-height: min(92vh, 720px);
 }
 
 .auth-box {
@@ -2397,6 +2398,7 @@ td strong.gold {
   .modal-backdrop {
     padding: 0;
     align-items: stretch;
+    justify-content: flex-start;
   }
 
   .modal {
@@ -2408,6 +2410,12 @@ td strong.gold {
     max-height: 100dvh;
     border-radius: 0;
     border: 0;
+  }
+
+  .modal.auth-modal {
+    height: auto;
+    max-height: 100dvh;
+    overflow: auto;
   }
 
   .modal-head {
@@ -2440,8 +2448,35 @@ td strong.gold {
 
   input[type='text'],
   input[type='number'],
-  select {
+  input[type='email'],
+  input[type='password'],
+  input[type='tel'],
+  input[type='search'],
+  select,
+  textarea {
     font-size: 16px;
+  }
+
+  .doc-input,
+  .auth-modal .doc-input,
+  .client-card .doc-input {
+    font-size: 16px !important;
+    min-height: 44px;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .auth-modal .doc-input {
+    width: 100%;
+    background: var(--bg) !important;
+    border: 1px solid var(--line-2) !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
+  }
+
+  body.kb-open .mobile-nav,
+  body.kb-open .fab {
+    display: none;
   }
 
   .btn {
@@ -2750,12 +2785,26 @@ td strong.gold {
     min-height: 44px;
   }
 
+  .client-card {
+    position: relative;
+    z-index: 1;
+    padding-bottom: 18px;
+  }
+
   .client-card .field {
     margin-top: 10px;
   }
 
+  .client-card .doc-input {
+    width: 100%;
+    background: var(--bg) !important;
+    border: 1px solid var(--line-2) !important;
+    border-radius: 10px !important;
+    padding: 12px 12px !important;
+  }
+
   .client-card textarea {
-    min-height: 72px;
+    min-height: 88px;
   }
 
   .list-send {
