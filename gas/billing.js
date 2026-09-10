@@ -447,23 +447,25 @@ function handleSync(body) {
   }
 }
 
-function mpIsProcessed(id) {
-  var list = []
+function mpProcessedList_() {
+  var raw = prop_('MP_PROCESSED')
+  if (!raw) return []
   try {
-    list = JSON.parse(prop_('MP_PROCESSED') || '[]')
+    var parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+    if (parsed && typeof parsed === 'object') return Object.keys(parsed)
   } catch (err) {
-    list = []
+    /* ignore */
   }
-  return list.indexOf(id) !== -1
+  return []
+}
+
+function mpIsProcessed(id) {
+  return mpProcessedList_().indexOf(id) !== -1
 }
 
 function mpMarkProcessed(id) {
-  var list = []
-  try {
-    list = JSON.parse(prop_('MP_PROCESSED') || '[]')
-  } catch (err) {
-    list = []
-  }
+  var list = mpProcessedList_()
   if (list.indexOf(id) === -1) list.push(id)
   if (list.length > 80) list = list.slice(-80)
   props().setProperty('MP_PROCESSED', JSON.stringify(list))
