@@ -1083,6 +1083,14 @@ input[type="color"] {
   gap: 10px;
 }
 
+.auth-plans.one {
+  grid-template-columns: 1fr;
+}
+
+.auth-plans.one .auth-plan {
+  cursor: default;
+}
+
 .auth-plan {
   border: 1px solid var(--line-2);
   border-radius: 10px;

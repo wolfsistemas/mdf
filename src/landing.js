@@ -107,7 +107,7 @@ export function landingHTML() {
         </div>
         <div class="lcard">
           <h3>Sua marca no papel</h3>
-          <p>Logo da sua marcenaria, WhatsApp com QR code e condições do seu jeito. O cliente leva seu contato junto com o orçamento.</p>
+          <p>WhatsApp com QR code já no Grátis. No Pro, a logo da sua marcenaria entra na capa e no rodapé do orçamento.</p>
         </div>
         <div class="lcard">
           <h3>Backup na nuvem</h3>
@@ -139,7 +139,8 @@ export function landingHTML() {
             <li>Até 3 orçamentos ativos</li>
             <li>Documento paginado com foto</li>
             <li>QR code de WhatsApp</li>
-            <li>Plano de corte e custos</li>
+            <li>Plano de corte, custos e CSV</li>
+            <li>Backup na nuvem com login</li>
             <li>Marca "MDF Atelier" no documento</li>
           </ul>
           <a class="btn-l outline full" href="#/app">Começar grátis</a>
@@ -149,24 +150,11 @@ export function landingHTML() {
           <p class="lprice">R$ 49<span>/mês</span></p>
           <ul>
             <li>Orçamentos ilimitados</li>
-            <li>Logo e nome da sua marcenaria</li>
-            <li>WhatsApp e QR personalizados</li>
-            <li>Exportar CSV das peças</li>
-            <li>Backup na nuvem</li>
-            <li>Suporte por WhatsApp</li>
+            <li>Logo da sua marcenaria no documento</li>
+            <li>Nome, WhatsApp e QR no orçamento</li>
+            <li>Tudo do Grátis, sem o teto de 3</li>
           </ul>
           <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
-        </div>
-        <div class="lplan">
-          <h3>Ultra</h3>
-          <p class="lprice">R$ 89<span>/mês</span></p>
-          <ul>
-            <li>Tudo do Pro</li>
-            <li>Veio por peça na inserção</li>
-            <li>Pagar 30 dias avulso</li>
-            <li>Prioridade no suporte</li>
-          </ul>
-          <a class="btn-l outline full" href="#/app?upgrade=ultra">Quero o Ultra</a>
         </div>
       </div>
       <p class="lpricing-note">Pagamento recorrente. Cancele quando quiser. O plano Grátis não precisa de cartão.</p>
@@ -186,7 +174,7 @@ export function landingHTML() {
       </details>
       <details>
         <summary>Consigo usar minha própria logo e meu WhatsApp?</summary>
-        <p>Sim, nos planos Pro e Ultra. O orçamento sai com a sua marca, seu número e QR code que abre a conversa já preenchida.</p>
+        <p>O WhatsApp e o QR code já estão no Grátis. A logo da sua marcenaria no documento é do plano Pro. Sem Pro, o orçamento sai com a marca MDF Atelier.</p>
       </details>
       <details>
         <summary>Os cálculos de chapa e sobra são confiáveis?</summary>
@@ -194,7 +182,7 @@ export function landingHTML() {
       </details>
       <details>
         <summary>O que acontece com meus dados se eu cancelar?</summary>
-        <p>Você pode exportar tudo (CSV e PDF) antes de cancelar. Após o cancelamento, você mantém acesso de leitura pelo tempo previsto em contrato.</p>
+        <p>Você pode exportar CSV e PDF a qualquer momento. Depois que o período pago acaba, a conta volta ao Grátis: até 3 orçamentos e a marca MDF Atelier no documento.</p>
       </details>
       <div class="lfaq-cta">
         <a class="btn-l primary" href="#/app">Testar grátis agora</a>

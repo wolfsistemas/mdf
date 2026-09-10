@@ -458,9 +458,10 @@ body.landing-mode {
 
 .lplans {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 360px));
   gap: 18px;
   align-items: stretch;
+  justify-content: center;
 }
 
 .lplan {

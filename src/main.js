@@ -496,14 +496,14 @@ function guardProjectSlots() {
   if (!planLimited()) return true
   if (state.projects.length >= FREE_PROJECT_LIMIT) {
     openUpgrade(
-      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro ou Ultra os orçamentos são ilimitados.`
+      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro os orçamentos são ilimitados.`
     )
     return false
   }
   return true
 }
 function openUpgrade(message, plan) {
-  modal = { kind: 'upgrade', msg: message || '', pick: plan === 'ultra' ? 'ultra' : 'pro' }
+  modal = { kind: 'upgrade', msg: message || '', pick: 'pro' }
   render()
 }
 
@@ -662,12 +662,7 @@ function consumeUpgradeIntent() {
   const m = (location.hash || '').match(/[?&]upgrade=(pro|ultra)(?:&|$)/)
   if (!m) return
   history.replaceState(null, '', (location.pathname || '/') + '#/app')
-  openUpgrade(
-    m[1] === 'ultra'
-      ? 'Plano Ultra: veio por peça na inserção e prioridade.'
-      : 'Plano Pro: orçamentos ilimitados, logo e WhatsApp no documento.',
-    m[1]
-  )
+  openUpgrade('Plano Pro: orçamentos ilimitados e a logo da sua marcenaria no documento.')
 }
 
 function authModal() {
@@ -746,18 +741,11 @@ function authModal() {
 
 function upgradeModal() {
   const m = modal
-  const pick = m.pick === 'ultra' ? 'ultra' : 'pro'
-  const chosen = PLANS[pick]
+  const chosen = PLANS.pro
   const msgEl = h('div', { class: 'auth-msg' }, [m.payMsg || ''])
   if (m.payKind) msgEl.className = 'auth-msg ' + m.payKind
-  const selectPick = (id) => {
-    m.pick = id
-    m.payMsg = ''
-    m.payKind = ''
-    render()
-  }
   const runPay = async (kind) => {
-    const plan = m.pick === 'ultra' ? 'ultra' : 'pro'
+    const plan = 'pro'
     if (!authUser) {
       modal = { kind: 'auth' }
       render()
@@ -798,32 +786,24 @@ function upgradeModal() {
     }
   }
   const mp = billingConfigured()
-  const bullets =
-    pick === 'ultra'
-      ? ['Tudo do Pro', 'Veio por peça na inserção', 'Pagar 30 dias avulso', 'Prioridade no suporte']
-      : ['Orçamentos ilimitados', 'Logo e WhatsApp no documento', 'Backup na nuvem', 'Suporte por WhatsApp']
+  const bullets = ['Orçamentos ilimitados', 'Logo da sua marcenaria no documento']
   return h('div', { class: 'modal-backdrop' }, [
     h('div', { class: 'modal auth-modal' }, [
       h('div', { class: 'modal-head' }, [
         h('div', {}, [
           h('h2', {}, ['Assinar o MDF Atelier']),
-          h('span', { class: 'help' }, ['Toque no plano e depois em Assinar. O pagamento abre no Mercado Pago.'])
+          h('span', { class: 'help' }, ['O pagamento abre no Mercado Pago.'])
         ]),
         h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
       ]),
       h('div', { class: 'modal-body' }, [
         h('div', { class: 'auth-box' }, [
           h('p', { class: 'help', style: 'line-height:1.5' }, [m.msg || '']),
-          h('div', { class: 'auth-plans' }, [
+          h('div', { class: 'auth-plans one' }, [
             h(
-              'button',
-              { type: 'button', class: 'auth-plan' + (pick === 'pro' ? ' hot' : ''), onClick: () => selectPick('pro') },
+              'div',
+              { class: 'auth-plan hot' },
               [h('strong', {}, [PLANS.pro.label]), h('span', {}, [PLANS.pro.priceLabel])]
-            ),
-            h(
-              'button',
-              { type: 'button', class: 'auth-plan' + (pick === 'ultra' ? ' hot' : ''), onClick: () => selectPick('ultra') },
-              [h('strong', {}, [PLANS.ultra.label]), h('span', {}, [PLANS.ultra.priceLabel])]
             )
           ]),
           h(
@@ -1307,12 +1287,17 @@ function totalsCard(t, p) {
 }
 
 function logoSrc() {
-  return (state.settings && state.settings.shopLogo) || import.meta.env.BASE_URL + 'logo.png'
+  if (canUseShopLogo() && state.settings && state.settings.shopLogo) return state.settings.shopLogo
+  return import.meta.env.BASE_URL + 'logo.png'
+}
+
+function canUseShopLogo() {
+  return !isLimitedPlan(currentPlan())
 }
 
 function docLogoMark(cls) {
   const mark = h('div', { class: 'mark' }, ['MDF ATELIER'])
-  const custom = state.settings && state.settings.shopLogo
+  const custom = canUseShopLogo() && state.settings && state.settings.shopLogo
   const img = h('img', { class: 'logo-img', src: logoSrc(), alt: '' })
   if (!custom) img.style.display = 'none'
   img.addEventListener('load', () => {
@@ -1327,6 +1312,11 @@ function docLogoMark(cls) {
 }
 
 function onLogoFile(e) {
+  if (!canUseShopLogo()) {
+    e.target.value = ''
+    openUpgrade('No Pro a logo da sua marcenaria aparece na capa e no rodapé do orçamento.')
+    return
+  }
   const file = e.target.files && e.target.files[0]
   if (!file) return
   if (file.size > 800000) {
@@ -2254,16 +2244,20 @@ function tabConta() {
         field('Telefone / WhatsApp', text(s.shopPhone || '', (v) => set({ shopPhone: v })))
       ]),
       h('div', { class: 'logo-config' }, [
-        field(
-          'Logo da marcenaria',
-          h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', onChange: onLogoFile })
-        ),
-        s.shopLogo
+        canUseShopLogo()
+          ? field(
+              'Logo da marcenaria',
+              h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', onChange: onLogoFile })
+            )
+          : h('p', { class: 'help' }, ['No plano Grátis o documento usa a marca MDF Atelier.']),
+        canUseShopLogo() && s.shopLogo
           ? h('div', { class: 'logo-preview-row' }, [
               h('img', { class: 'logo-preview', src: s.shopLogo, alt: 'Logo atual' }),
               h('button', { class: 'btn small ghost', onClick: clearShopLogo }, ['Remover logo'])
             ])
-          : h('p', { class: 'help' }, ['A logo aparece na capa e no rodapé de todos os orçamentos. Sem arquivo, usamos o monograma.'])
+          : canUseShopLogo()
+            ? h('p', { class: 'help' }, ['A logo aparece na capa e no rodapé de todos os orçamentos. Sem arquivo, usamos o monograma.'])
+            : h('button', { class: 'btn small primary', onClick: () => openUpgrade('No Pro a logo da sua marcenaria aparece na capa e no rodapé do orçamento.') }, ['Usar minha logo no Pro']),
       ]),
       h('p', { class: 'help' }, [
         'O WhatsApp aparece no documento com um QR code: ao escanear, o cliente já abre a conversa com o nome e o valor daquele orçamento.'

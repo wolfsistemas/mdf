@@ -52,9 +52,9 @@ Tudo em milimetros. Preco da chapa e da fita em reais, editavel em Config, junto
 
 ## Logo do orcamento
 
-Na aba **Config** da oficina, envie a logo da marcenaria (PNG/JPEG/WebP, ate
+Na aba **Conta**, no plano Pro, envie a logo da marcenaria (PNG/JPEG/WebP, ate
 800 KB). Ela fica salva nas configuracoes e aparece na capa e no rodape do
-orcamento. Sem logo, o documento usa o monograma de texto.
+orcamento. No Grátis o documento usa o monograma MDF Atelier.
 
 Tambem e possivel deixar um `public/logo.png` de fallback (veja
 `public/README.md`).
@@ -124,12 +124,13 @@ Depois de rodar o schema, use o botao **Backup na nuvem** (barra lateral) do
 app para criar a conta e sincronizar. Primeiro login com a conta vazia envia os
 dados do navegador para a nuvem; nas proximas vezes a nuvem e a fonte dos dados.
 
-### Planos (Gratis / Pro / Ultra)
+### Planos (Gratis / Pro)
 
-Contas novas entram no **Gratis**: ate 3 orcamentos ativos. Pro (R$ 49/mes)
-e Ultra (R$ 89/mes) sao ilimitados. O plano efetivo vem das colunas
-`profiles.plan` e `profiles.plan_expires_at` (o cliente autenticado nao
-consegue se promover). Sem login (demo local) nao ha limite.
+Contas novas entram no **Gratis**: ate 3 orcamentos ativos (vale tambem
+deslogado). Pro (R$ 49/mes) e ilimitado e libera a **logo da marcenaria**
+no documento. O plano efetivo vem das colunas `profiles.plan` e
+`profiles.plan_expires_at` (o cliente autenticado nao consegue se promover).
+O Ultra esta oculto na oferta ate ter feature propria (equipe compartilhada).
 
 Assinatura: Mercado Pago hospedado (`preapproval_plan` + `init_point`).
 O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
