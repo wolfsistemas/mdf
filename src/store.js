@@ -159,20 +159,19 @@ function migrateProject(p) {
   }
 }
 
+export function guestState() {
+  const project = sampleProject()
+  return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
+}
+
 export function loadState() {
   try {
     const v2 = localStorage.getItem(KEY)
     const v1 = localStorage.getItem('mdf-atelier-v1')
     const raw = v2 || v1
-    if (!raw) {
-      const project = sampleProject()
-      return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
-    }
+    if (!raw) return guestState()
     const data = JSON.parse(raw)
-    if (!data.projects?.length) {
-      const project = sampleProject()
-      return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
-    }
+    if (!data.projects?.length) return guestState()
     data.settings = { ...defaultSettings(), ...data.settings }
     data.projects = data.projects.map(migrateProject)
     if (!v2 && v1) {
@@ -185,8 +184,7 @@ export function loadState() {
     }
     return data
   } catch {
-    const project = sampleProject()
-    return { settings: defaultSettings(), activeProjectId: project.id, projects: [project] }
+    return guestState()
   }
 }
 

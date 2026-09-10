@@ -2,6 +2,7 @@ import './styles.css'
 import {
   loadState,
   saveState,
+  guestState,
   blankProject,
   blankPiece,
   GRAIN,
@@ -71,6 +72,8 @@ let lastSyncAt = 0
 let lastSyncOk = true
 let shareBusy = false
 let tourStep = 0
+let saveToastTimer = null
+let saveToastHide = null
 const groupOpen = {}
 CATALOG_GROUPS.forEach((g, i) => (groupOpen[g.group] = i === 0))
 
@@ -119,9 +122,10 @@ function recalc() {
   summaryCache = summarize(p, state.settings, layoutCache, piecesCache)
   saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, p.billingBasis || 'used')
 }
-function persist() {
+function persist(opts) {
   saveState(state)
   scheduleCloud()
+  if (!(opts && opts.silent)) showSavedToast()
   recalc()
   render()
 }
@@ -162,7 +166,7 @@ function setActive(id) {
   modal = null
   listFocusId = null
   tab = 'orcamento'
-  persist()
+  persist({ silent: true })
 }
 
 function addProject() {
@@ -222,6 +226,7 @@ function liveProject(patch) {
   Object.assign(project(), patch)
   saveState(state)
   scheduleCloud()
+  showSavedToast(true)
 }
 
 function updateFurniture(id, patch) {
@@ -533,20 +538,57 @@ function openAuth() {
   render()
 }
 
-function clearLocalPlan() {
-  state.settings.plan = 'gratis'
-  state.settings.planExpiresAt = ''
+function resetToGuest() {
+  const fresh = guestState()
+  state.settings = fresh.settings
+  state.projects = fresh.projects
+  state.activeProjectId = fresh.activeProjectId
+  selectedFurnitureId = null
+  listFocusId = null
+  modal = null
+  tab = 'projetos'
+  lastSyncAt = 0
+  lastSyncOk = true
   saveState(state)
+  recalc()
 }
 
 async function cloudLogout() {
-  clearLocalPlan()
+  clearTimeout(syncTimer)
   authUser = null
   modal = null
+  resetToGuest()
+  const toast = document.getElementById('save-toast')
+  if (toast) toast.classList.remove('show')
   const r = await cloudSignOut()
   if (r.error) console.warn(r.error)
   authUser = null
   render()
+}
+
+function showSavedToast(debounce) {
+  const run = () => {
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    let el = document.getElementById('save-toast')
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'save-toast'
+      el.className = 'save-toast'
+      document.body.append(el)
+    }
+    el.textContent = `Orçamento salvo automaticamente às ${hh}:${mm}`
+    el.classList.add('show')
+    clearTimeout(saveToastHide)
+    saveToastHide = setTimeout(() => el.classList.remove('show'), 2200)
+  }
+  clearTimeout(saveToastTimer)
+  if (debounce) {
+    saveToastTimer = setTimeout(run, 700)
+    return
+  }
+  run()
 }
 
 function applyCloudData(data) {
@@ -555,7 +597,7 @@ function applyCloudData(data) {
   state.activeProjectId = data.activeProjectId || (data.projects[0] && data.projects[0].id)
   selectedFurnitureId = null
   modal = null
-  persist()
+  persist({ silent: true })
 }
 
 async function syncAfterLogin() {
