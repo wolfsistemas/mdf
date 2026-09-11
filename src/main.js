@@ -7,6 +7,9 @@ import {
   blankPiece,
   GRAIN,
   CUT_MODES,
+  THICKNESS_PRESETS,
+  SHEET_PRESETS,
+  TAPE_PRESETS,
   formatMoney,
   formatM2,
   formatMeters,
@@ -426,6 +429,16 @@ function inputNum(value, onChange, extra = {}) {
 
 function field(label, control, extraClass = '') {
   return h('div', { class: 'field ' + extraClass }, [h('label', {}, [label]), control])
+}
+
+function presetRow(label, options, onPick) {
+  return h('div', { class: 'preset-row' }, [
+    h('span', { class: 'preset-label' }, [label]),
+    ...options.map((opt) => {
+      const text = typeof opt === 'string' ? opt : opt.label
+      return h('button', { class: 'preset-chip', type: 'button', onClick: () => onPick(opt) }, [text])
+    })
+  ])
 }
 
 function text(value, onChange, placeholder) {
@@ -1528,7 +1541,7 @@ function pickerModal() {
           h('input', {
             type: 'text',
             value: catalogQuery,
-            placeholder: 'Buscar (ex.: mesa, correr, gavetas, armário…)',
+            placeholder: 'Buscar (ex.: mesa, correr, cozinha, banheiro, gavetas, armário…)',
             onChange: (e) => {
               catalogQuery = e.target.value
               refresh()
@@ -1537,9 +1550,9 @@ function pickerModal() {
         ]),
         h('div', { class: 'picker-groups' }, [
           CATALOG_GROUPS.map((g) => {
-            const matches = g.models.filter(
-              (m) => !hasQuery || (m.label + ' ' + m.blurb + ' ' + g.group).toLowerCase().includes(query)
-            )
+            const hay = (m) =>
+              [m.label, m.blurb, g.group, m.type, m.variant, (m.tags || []).join(' ')].join(' ').toLowerCase()
+            const matches = g.models.filter((m) => !hasQuery || query.split(/\s+/).every((t) => hay(m).includes(t)))
             if (hasQuery && !matches.length) return null
             const open = hasQuery ? true : !!groupOpen[g.group]
             return h('div', { class: 'catalog-group' }, [
@@ -2323,6 +2336,12 @@ function tabConta() {
         field('Espessura mm', inputNum(s.sheetThickness, (v) => set({ sheetThickness: v }))),
         field('Preço da chapa', inputNum(s.sheetPrice, (v) => set({ sheetPrice: v }), { step: '0.01' }))
       ]),
+      presetRow('Chapa', SHEET_PRESETS, (p) => set({ sheetName: p.name, sheetWidth: p.width, sheetHeight: p.height })),
+      presetRow(
+        'Espessura',
+        THICKNESS_PRESETS.map((t) => ({ label: `${t} mm`, value: t })),
+        (p) => set({ sheetThickness: p.value })
+      ),
       h('p', { class: 'help' }, [
         `Área da chapa: ${formatM2(sheetAreaM2(s))} · média ${formatMoney(panelPricePerM2(s))}/m² (preço da chapa ÷ área).`
       ]),
@@ -2347,7 +2366,8 @@ function tabConta() {
       h('div', { class: 'row' }, [
         field('Nome da fita', text(s.tapeName, (v) => set({ tapeName: v })), 'grow'),
         field('Preço por metro', inputNum(s.tapePricePerMeter, (v) => set({ tapePricePerMeter: v }), { step: '0.01' }))
-      ])
+      ]),
+      presetRow('Modelos', TAPE_PRESETS, (name) => set({ tapeName: name }))
     ])
   ])
 }

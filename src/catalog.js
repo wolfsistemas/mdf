@@ -54,7 +54,7 @@ const COMMON_BOX_FIELDS = (hasDivs = false) => [
   nf('doors', 'Portas'),
   nf('shelves', 'Prateleiras'),
   ...(hasDivs ? [nf('divisors', 'Divisores internos')] : []),
-  cf('hasBack', 'Fundo 15 mm'),
+  cf('hasBack', 'Fundo'),
   nf('carcassT', 'Esp. caixa mm'),
   nf('backT', 'Esp. fundo mm'),
   nf('doorT', 'Esp. porta mm')
@@ -69,7 +69,7 @@ const BOX_CARCASS = {
   divisors: 0,
   hasBack: 1,
   carcassT: 15,
-  backT: 15,
+  backT: 6,
   doorT: 15
 }
 
@@ -243,6 +243,27 @@ export const CATALOG_GROUPS = [
       { type: 'prateleira', variant: 'livre', label: 'Prateleira solta', blurb: 'Peça única, repetida N vezes.', defaults: { width: 800, depth: 250, thickness: 15, qty: 3 }, fields: [nf('width', 'Largura mm'), nf('depth', 'Profundidade mm'), nf('thickness', 'Espessura mm'), nf('qty', 'Quantidade')] },
       { type: 'avulso', variant: 'pecas', label: 'Peças avulsas', blurb: 'Lista livre, sem fórmula.', defaults: {}, fields: [] }
     ]
+  },
+  {
+    group: 'Cozinha e banheiro',
+    models: [
+      { type: 'armario', variant: 'gabinete-inferior', label: 'Gabinete inferior', blurb: 'Balcão de cozinha com portas e prateleira.', defaults: { ...BOX_CARCASS, width: 800, height: 850, depth: 550, doors: 2, shelves: 1 }, fields: COMMON_BOX_FIELDS() },
+      { type: 'armario', variant: 'torre', label: 'Torre / despenseiro', blurb: 'Coluna alta com portas e prateleiras.', defaults: { ...BOX_CARCASS, width: 600, height: 2100, depth: 550, doors: 2, shelves: 4, divisors: 1 }, fields: COMMON_BOX_FIELDS(true) },
+      { type: 'armario', variant: 'ilha', label: 'Ilha / balcão central', blurb: 'Módulo baixo e largo para ilha.', defaults: { ...BOX_CARCASS, width: 1800, height: 900, depth: 600, doors: 3, shelves: 2, divisors: 1 }, fields: COMMON_BOX_FIELDS(true) },
+      { type: 'armario', variant: 'gabinete-pia', label: 'Gabinete sob pia', blurb: 'Banheiro: portas, sem tampo de pedra.', defaults: { ...BOX_CARCASS, width: 800, height: 600, depth: 450, doors: 2, shelves: 1 }, fields: COMMON_BOX_FIELDS() },
+      { type: 'armario', variant: 'espelheira', label: 'Espelheira', blurb: 'Aéreo raso de banheiro.', defaults: { ...BOX_CARCASS, width: 800, height: 700, depth: 150, doors: 2, shelves: 2 }, fields: COMMON_BOX_FIELDS() },
+      { type: 'armario', variant: 'forno', label: 'Nicho para forno/micro', blurb: 'Vão aberto para eletrodoméstico.', defaults: { ...BOX_CARCASS, width: 600, height: 700, depth: 550, doors: 0, shelves: 1 }, fields: COMMON_BOX_FIELDS() }
+    ]
+  },
+  {
+    group: 'Sala e comércio',
+    models: [
+      { type: 'armario', variant: 'buffet', label: 'Buffet / aparador', blurb: 'Baixo e largo para sala de jantar.', defaults: { ...BOX_CARCASS, width: 1800, height: 850, depth: 450, doors: 3, shelves: 2, divisors: 1 }, fields: COMMON_BOX_FIELDS(true) },
+      { type: 'armario', variant: 'balcao-loja', label: 'Balcão de atendimento', blurb: 'Caixa alta com portas para loja.', defaults: { ...BOX_CARCASS, width: 1600, height: 1000, depth: 600, doors: 3, shelves: 2 }, fields: COMMON_BOX_FIELDS() },
+      { type: 'nicho', variant: 'painel-vao', label: 'Painel vazado', blurb: 'Painel de parede com nichos.', defaults: { width: 2200, height: 1200, depth: 350, shelves: 2, divisors: 2, hasBack: 1, carcassT: 15, backT: 6 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('shelves', 'Prateleiras'), nf('divisors', 'Divisores'), cf('hasBack', 'Fundo'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm')] },
+      { type: 'nicho', variant: 'expositor', label: 'Expositor / gôndola', blurb: 'Estante alta para loja.', defaults: { width: 1200, height: 1800, depth: 400, shelves: 4, divisors: 1, hasBack: 1, carcassT: 15, backT: 6 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('shelves', 'Prateleiras'), nf('divisors', 'Divisores'), cf('hasBack', 'Fundo'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm')] },
+      { type: 'gaveteiro', variant: 'penteadeira', label: 'Penteadeira', blurb: 'Cômoda baixa de quarto.', defaults: { width: 1000, height: 780, depth: 450, gavetas: 3, carcassT: 15, backT: 6, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] }
+    ]
   }
 ]
 
@@ -254,7 +275,61 @@ function withDrawerHeight(m) {
   return { ...m, fields: [...m.fields, nf('gavH', 'Altura da gaveta mm (0 = automática)')] }
 }
 
-const MODELS = CATALOG_GROUPS.flatMap((g) => g.models.map((m) => withDrawerHeight({ ...m, group: g.group })))
+const MODEL_TAGS = {
+  'mesa:reta': ['escritório', 'estudo', 'computador', 'trabalho'],
+  'mesa:gaveteiro': ['escritório', 'estudo', 'gavetas'],
+  'mesa:l-esq': ['escritório', 'canto', 'estação de trabalho'],
+  'mesa:l-dir': ['escritório', 'canto', 'estação de trabalho'],
+  'mesa:jantar': ['sala de jantar', 'cozinha', 'jantar'],
+  'mesa:escrivaninha': ['estudo', 'quarto', 'escritório'],
+  'mesa:reuniao': ['escritório', 'sala de reunião', 'empresa'],
+  'armario:1-porta': ['quarto', 'sala', 'escritório'],
+  'armario:2-portas': ['quarto', 'sala', 'escritório'],
+  'armario:3-portas': ['quarto', 'sala', 'escritório'],
+  'armario:4-portas': ['quarto', 'sala', 'escritório'],
+  'armario:baixo-portas': ['cozinha', 'banheiro', 'balcão'],
+  'armario:baixo-gavetas': ['cozinha', 'banheiro', 'balcão', 'gavetas'],
+  'armario:alto-portas': ['cozinha', 'despenseiro', 'torre'],
+  'armario:aereo': ['cozinha', 'banheiro', 'aéreo', 'suspenso'],
+  'armario:cristaleira': ['sala', 'jantar', 'vidro', 'vitrine'],
+  'armario:gabinete-inferior': ['cozinha', 'balcão', 'armário inferior'],
+  'armario:torre': ['cozinha', 'despenseiro', 'torre'],
+  'armario:ilha': ['cozinha', 'ilha', 'balcão central'],
+  'armario:gabinete-pia': ['banheiro', 'pia', 'gabinete'],
+  'armario:espelheira': ['banheiro', 'espelho', 'aéreo'],
+  'armario:forno': ['cozinha', 'forno', 'micro-ondas', 'eletrodoméstico'],
+  'armario:buffet': ['sala', 'sala de jantar', 'aparador'],
+  'armario:balcao-loja': ['loja', 'comércio', 'balcão', 'atendimento'],
+  'guarda-roupa:2-portas': ['quarto', 'closet'],
+  'guarda-roupa:3-portas': ['quarto', 'closet'],
+  'guarda-roupa:4-portas': ['quarto', 'closet'],
+  'guarda-roupa:6-portas': ['quarto', 'closet'],
+  'guarda-roupa:correr-2': ['quarto', 'closet', 'correr'],
+  'guarda-roupa:correr-4': ['quarto', 'closet', 'correr'],
+  'guarda-roupa:com-gavetas': ['quarto', 'closet', 'gavetas', 'sapateira'],
+  'guarda-roupa:closet': ['quarto', 'closet', 'cabideiro'],
+  'gaveteiro:2': ['escritório', 'quarto'],
+  'gaveteiro:3': ['escritório'],
+  'gaveteiro:4': ['escritório', 'quarto'],
+  'gaveteiro:5': ['escritório'],
+  'gaveteiro:arquivo': ['escritório', 'documentos', 'pasta'],
+  'gaveteiro:comoda': ['quarto', 'sala', 'cômoda'],
+  'gaveteiro:criado': ['quarto', 'cabeceira'],
+  'gaveteiro:sapateira': ['quarto', 'closet', 'sapato'],
+  'nicho:simples': ['sala', 'quarto', 'parede'],
+  'nicho:duplo': ['sala', 'quarto', 'parede'],
+  'nicho:estante': ['sala', 'escritório', 'livros'],
+  'nicho:rack': ['sala', 'tv', 'painel', 'home theater'],
+  'nicho:painel-vao': ['sala', 'painel', 'parede', 'nichos'],
+  'nicho:expositor': ['loja', 'comércio', 'expositor', 'gôndola', 'estante'],
+  'gaveteiro:penteadeira': ['quarto', 'penteadeira', 'cômoda'],
+  'prateleira:livre': ['sala', 'cozinha', 'depósito'],
+  'avulso:pecas': ['peças', 'avulso', 'lista livre']
+}
+
+const MODELS = CATALOG_GROUPS.flatMap((g) =>
+  g.models.map((m) => withDrawerHeight({ tags: MODEL_TAGS[`${m.type}:${m.variant}`] || [], ...m, group: g.group }))
+)
 
 export const CATALOG = MODELS
 

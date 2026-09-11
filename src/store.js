@@ -13,6 +13,23 @@ export const CUT_MODES = {
   free: 'Nesting livre'
 }
 
+export const THICKNESS_PRESETS = [6, 15, 18, 25]
+
+export const SHEET_PRESETS = [
+  { label: 'MDF 2750×1830', name: 'MDF 2750x1830', width: 2750, height: 1830 },
+  { label: 'MDF 2750×2050', name: 'MDF 2750x2050', width: 2750, height: 2050 },
+  { label: 'MDF 2440×1220', name: 'MDF 2440x1220', width: 2440, height: 1220 },
+  { label: 'MDP 2750×1830', name: 'MDP 2750x1830', width: 2750, height: 1830 }
+]
+
+export const TAPE_PRESETS = [
+  'Fita PVC 22 mm',
+  'Fita PVC 18 mm',
+  'Fita PVC 35 mm',
+  'Fita ABS 22 mm',
+  'Fita melamínica 22 mm'
+]
+
 const uid = () =>
   Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)
 
@@ -49,7 +66,7 @@ function sampleProject() {
     shelves: 4,
     hasBack: 1,
     carcassT: 15,
-    backT: 15,
+    backT: 6,
     doorT: 15
   }
   const mesa = createFurniture(modelByTypeVariant('mesa', 'gaveteiro'), [armario])
