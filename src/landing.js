@@ -157,7 +157,7 @@ export function landingHTML() {
           <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
         </div>
       </div>
-      <p class="lpricing-note">Pagamento recorrente. Cancele quando quiser. O plano Grátis não precisa de cartão.</p>
+      <p class="lpricing-note">Pagamento recorrente no Mercado Pago. Cancele quando quiser na aba Conta; o período já pago segue até o vencimento. O plano Grátis não precisa de cartão.</p>
     </div>
   </section>
 
@@ -169,8 +169,8 @@ export function landingHTML() {
         <p>Não. O MDF Atelier roda no navegador do celular ou do computador. No plano com nuvem, seus dados ficam salvos na sua conta.</p>
       </details>
       <details>
-        <summary>Funciona sem internet?</summary>
-        <p>Funciona. O app guarda os dados no aparelho e sincroniza quando você está online e logado na conta.</p>
+        <summary>Preciso de internet?</summary>
+        <p>Sim, para abrir o app e sincronizar a nuvem. Os orçamentos ficam salvos neste aparelho depois que você usa; não prometemos funcionamento 100% offline.</p>
       </details>
       <details>
         <summary>Consigo usar minha própria logo e meu WhatsApp?</summary>
@@ -179,6 +179,10 @@ export function landingHTML() {
       <details>
         <summary>Os cálculos de chapa e sobra são confiáveis?</summary>
         <p>Sim. O plano de corte é feito em cima da chapa real (2750x1830), considerando kerf da serra, refilo, sentido do veio e fita de borda. As sobras podem ser cobradas por área usada ou rateadas entre os itens.</p>
+      </details>
+      <details>
+        <summary>Como cancelo a assinatura?</summary>
+        <p>Na aba Conta, toque em Cancelar assinatura. A próxima cobrança não acontece. O Pro segue até a data de vencimento; depois a conta volta ao Grátis (3 orçamentos e marca MDF Atelier).</p>
       </details>
       <details>
         <summary>O que acontece com meus dados se eu cancelar?</summary>
@@ -200,10 +204,73 @@ export function landingHTML() {
         <a href="#recursos">Recursos</a>
         <a href="#planos">Planos</a>
         <a href="#faq">FAQ</a>
+        <a href="#/termos">Termos</a>
+        <a href="#/privacidade">Privacidade</a>
         <a href="#/app">Entrar no app</a>
       </nav>
     </div>
-    <p class="lf-copy">MDF Atelier — todos os direitos reservados.</p>
+    <p class="lf-copy">MDF Atelier — todos os direitos reservados. Contato: wolfsaasbr@gmail.com</p>
   </footer>
 </div>`
+}
+
+function legalShell(title, body) {
+  return `
+<div class="landing">
+  <header class="lnav">
+    <div class="lnav-in">
+      <a class="lmark" href="#"><span class="lmark-b">MDF</span><span class="lmark-w">ATELIER</span></a>
+      <nav class="lnav-links">
+        <a href="#">Início</a>
+        <a href="#/app">Abrir o app</a>
+      </nav>
+      <a class="btn-l primary" href="#/app">Abrir o app</a>
+    </div>
+  </header>
+  <section class="lsection llegal">
+    <div class="lwrap lwrap-narrow">
+      <h1>${title}</h1>
+      ${body}
+      <p class="llegal-back"><a href="#">Voltar ao início</a></p>
+    </div>
+  </section>
+</div>`
+}
+
+export function termosHTML() {
+  return legalShell(
+    'Termos de uso',
+    `
+      <p>O MDF Atelier é um software para marcenarias calcularem orçamentos e planos de corte. Ao usar o app, você concorda com estes termos.</p>
+      <h2>Conta e planos</h2>
+      <p>O plano Grátis permite até 3 orçamentos ativos e usa a marca MDF Atelier no documento. O plano Pro (R$ 49/mês) libera orçamentos ilimitados e a logo da sua marcenaria. A cobrança é feita pelo Mercado Pago. O cartão nunca é digitado neste site.</p>
+      <h2>Cancelamento</h2>
+      <p>Você pode cancelar a assinatura a qualquer momento na aba Conta do app. O cancelamento impede a próxima cobrança. O período já pago continua válido até a data de vencimento; depois a conta volta ao Grátis.</p>
+      <h2>Uso aceitável</h2>
+      <p>Você é responsável pelos orçamentos, preços e documentos que gera para seus clientes. O app auxilia no cálculo; a conferência final das medidas e do corte é sua.</p>
+      <h2>Disponibilidade</h2>
+      <p>O serviço depende de internet para abrir, autenticar e sincronizar. Dados no aparelho podem permanecer salvos localmente. Não garantimos funcionamento sem rede nem ausência de interrupções.</p>
+      <h2>Contato</h2>
+      <p>Dúvidas: <a href="mailto:wolfsaasbr@gmail.com">wolfsaasbr@gmail.com</a>.</p>
+    `
+  )
+}
+
+export function privacidadeHTML() {
+  return legalShell(
+    'Privacidade',
+    `
+      <p>Tratamos dados para operar o MDF Atelier, nos termos da LGPD (Lei 13.709/2018).</p>
+      <h2>O que coletamos</h2>
+      <p>Na conta: e-mail e senha (autenticação). Nos orçamentos: nome do cliente, telefone, notas, móveis, medidas, logo e WhatsApp da marcenaria que você informar. No pagamento: o Mercado Pago processa os dados do cartão; este site não recebe nem armazena número de cartão.</p>
+      <h2>Onde fica</h2>
+      <p>Sem login, os dados ficam neste aparelho (navegador). Com login, sincronizamos na sua conta na nuvem (Supabase) para você acessar de outro dispositivo.</p>
+      <h2>Para que usamos</h2>
+      <p>Gerar orçamentos, plano de corte, PDF e cobrança da assinatura. Não vendemos sua lista de clientes.</p>
+      <h2>Seus direitos</h2>
+      <p>Você pode acessar, corrigir ou pedir a exclusão dos dados da conta pelo e-mail <a href="mailto:wolfsaasbr@gmail.com">wolfsaasbr@gmail.com</a>. Ao sair da conta neste aparelho, os orçamentos da nuvem deixam de aparecer aqui e volta o projeto de exemplo.</p>
+      <h2>Contato do responsável</h2>
+      <p>Wolf Sistemas — <a href="mailto:wolfsaasbr@gmail.com">wolfsaasbr@gmail.com</a>.</p>
+    `
+  )
 }

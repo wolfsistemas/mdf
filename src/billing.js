@@ -1,6 +1,7 @@
 export const SALE = {
   url: '',
-  whatsapp: ''
+  whatsapp: '',
+  email: 'wolfsaasbr@gmail.com'
 }
 
 export const FREE_PROJECT_LIMIT = 3
@@ -56,6 +57,25 @@ export function effectivePlan(plan, expiresAt) {
 
 export function saleDigits() {
   return String(SALE.whatsapp || '').replace(/\D/g, '')
+}
+
+export function supportHref(message) {
+  const wa = saleDigits()
+  if (wa.length >= 8) {
+    const text = encodeURIComponent(message || 'Olá! Preciso de suporte no MDF Atelier.')
+    return `https://wa.me/${wa}?text=${text}`
+  }
+  const email = String(SALE.email || '').trim()
+  if (email) {
+    const subject = encodeURIComponent('Suporte MDF Atelier')
+    const body = encodeURIComponent(message || 'Olá! Preciso de suporte no MDF Atelier.')
+    return `mailto:${email}?subject=${subject}&body=${body}`
+  }
+  return '#/app'
+}
+
+export function supportLabel() {
+  return saleDigits().length >= 8 ? 'WhatsApp de suporte' : 'E-mail de suporte'
 }
 
 export function upgradeHref(message) {

@@ -97,10 +97,9 @@ A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, planos e FAQ; o
 app fica em `/mdf/#/app` (botao "Abrir o app" / "Testar gratis").
 
 Textos, precos e planos ficam em `src/landing.js` e o visual em
-`src/landing.css`. O WhatsApp comercial e o link de assinatura ficam
-unificados em `src/billing.js` (`SALE.whatsapp` / `SALE.url`) e valem
-para a landing e para o modal de upgrade do app. Enquanto os dois
-estiverem vazios, os CTAs levam para o app.
+`src/landing.css`. Termos em `#/termos` e privacidade em `#/privacidade`.
+Suporte: `SALE.email` (padrao wolfsaasbr@gmail.com). Se preencher
+`SALE.whatsapp` em `src/billing.js`, o botao de suporte abre o WhatsApp.
 
 ## Nuvem com Supabase (para vender / varios clientes)
 

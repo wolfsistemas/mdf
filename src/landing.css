@@ -629,6 +629,31 @@ body.landing-mode {
   margin: 0;
 }
 
+.llegal h1 {
+  font-size: 28px;
+  margin: 0 0 18px;
+}
+
+.llegal h2 {
+  font-size: 16px;
+  margin: 22px 0 8px;
+}
+
+.llegal p {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin: 0 0 10px;
+}
+
+.llegal a {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+.llegal-back {
+  margin-top: 28px;
+}
+
 /* ---------- responsivo ---------- */
 
 @media (max-width: 920px) {

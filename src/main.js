@@ -35,7 +35,7 @@ import {
   pullState,
   schedulePush
 } from './cloud.js'
-import { landingHTML } from './landing.js'
+import { landingHTML, termosHTML, privacidadeHTML } from './landing.js'
 import {
   FREE_PROJECT_LIMIT,
   PLANS,
@@ -45,7 +45,10 @@ import {
   billingConfigured,
   subscribePlan,
   checkoutOnce,
-  syncSubscription
+  syncSubscription,
+  cancelSubscription,
+  supportHref,
+  supportLabel
 } from './billing.js'
 import qrcode from 'qrcode-generator'
 qrcode.stringToBytes =
@@ -2224,6 +2227,33 @@ function settingsPatch(patch) {
   persist()
 }
 
+async function cancelPlan() {
+  if (!authUser) {
+    openAuth()
+    return
+  }
+  if (!confirmDialog('Cancelar a assinatura Pro? A próxima cobrança não acontece. O período já pago segue até o vencimento.')) return
+  const overlay = document.createElement('div')
+  overlay.className = 'capturing-overlay'
+  overlay.textContent = 'Cancelando…'
+  document.body.append(overlay)
+  try {
+    const r = await cancelSubscription(authUser.id)
+    if (r && r.canceled) {
+      window.alert('Assinatura cancelada. O Pro segue até o vencimento; depois a conta volta ao Grátis.')
+      const synced = await syncSubscription(authUser.id).catch(() => null)
+      if (synced) applyPlanPayload(synced)
+      else render()
+      return
+    }
+    window.alert('Não deu para cancelar agora. Tente de novo ou fale com o suporte.')
+  } catch (err) {
+    window.alert((err && err.message) || 'Não deu para cancelar agora.')
+  } finally {
+    overlay.remove()
+  }
+}
+
 function tabConta() {
   const s = state.settings
   const set = settingsPatch
@@ -2235,7 +2265,18 @@ function tabConta() {
       h('p', { class: 'help' }, [`Plano atual: ${planLabel(plan)}. ${authUser ? authUser.email : 'Sem login — os orçamentos ficam só neste aparelho.'}`]),
       cloudConfigured() && !authUser
         ? h('div', { class: 'row', style: 'margin-top:10px' }, [h('button', { class: 'btn primary', onClick: openAuth }, ['Entrar ou criar conta'])])
-        : null
+        : null,
+      h('div', { class: 'row', style: 'margin-top:12px;flex-wrap:wrap' }, [
+        h('a', { class: 'btn small ghost', href: supportHref(), target: '_blank', rel: 'noopener' }, [supportLabel()]),
+        !isLimitedPlan(plan) && authUser
+          ? h('button', { class: 'btn small ghost danger-side', onClick: cancelPlan }, ['Cancelar assinatura'])
+          : null
+      ]),
+      h('p', { class: 'help' }, [
+        isLimitedPlan(plan)
+          ? 'Suporte por e-mail. No Pro, cancele a assinatura nesta tela — o mês já pago segue até o vencimento.'
+          : 'Cancelar impede a próxima cobrança. O Pro segue até a data de vencimento; depois a conta volta ao Grátis.'
+      ])
     ]),
     h('div', { class: 'card' }, [
       h('h2', {}, ['Marca no documento']),
@@ -2526,8 +2567,16 @@ function registerPwa() {
 let appStarted = false
 let currentScreen = null
 
+function desiredScreen() {
+  const hash = location.hash || ''
+  if (hash.startsWith('#/app') || hashHasPlanOk()) return 'app'
+  if (hash.startsWith('#/termos')) return 'termos'
+  if (hash.startsWith('#/privacidade')) return 'privacidade'
+  return 'landing'
+}
+
 function showScreen() {
-  const desired = location.hash.startsWith('#/app') || hashHasPlanOk() ? 'app' : 'landing'
+  const desired = desiredScreen()
   if (currentScreen === desired) {
     if (desired === 'app') {
       consumeUpgradeIntent()
@@ -2567,7 +2616,9 @@ function showScreen() {
   } else {
     document.body.classList.add('landing-mode')
     root.innerHTML = ''
-    root.insertAdjacentHTML('afterbegin', landingHTML())
+    const html = desired === 'termos' ? termosHTML() : desired === 'privacidade' ? privacidadeHTML() : landingHTML()
+    root.insertAdjacentHTML('afterbegin', html)
+    window.scrollTo(0, 0)
   }
 }
 
