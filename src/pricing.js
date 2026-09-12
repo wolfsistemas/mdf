@@ -1,4 +1,4 @@
-import { flattenProjectPieces } from './catalog.js'
+import { flattenProjectPieces, hardwareCounts } from './catalog.js'
 import { edgeMeters, pieceAreaM2 } from './nesting.js'
 
 const qtyInt = (v) => Math.max(0, Math.floor(Number(v) || 0))
@@ -29,6 +29,24 @@ function unitQty(item) {
   return Math.max(1, qtyInt(item.qty) || 1)
 }
 
+export function hardwareCost(item, settings) {
+  const h = hardwareCounts(item)
+  const handles = h.handles * Number(settings.handlePrice || 0)
+  const hinges = h.hinges * Number(settings.hingePrice || 0)
+  const slides = h.slides * Number(settings.slidePrice || 0)
+  const tracks = h.tracks * Number(settings.trackPrice || 0)
+  const feet = h.feetBuy * Number(settings.footPrice || 0)
+  return {
+    ...h,
+    handlesCost: handles,
+    hingesCost: hinges,
+    slidesCost: slides,
+    tracksCost: tracks,
+    feetCost: feet,
+    hardware: handles + hinges + slides + tracks + feet
+  }
+}
+
 export function itemCost(item, settings) {
   const m = itemMetrics(item)
   const panel = m.areaM2 * panelPricePerM2(settings)
@@ -36,7 +54,8 @@ export function itemCost(item, settings) {
   const material = panel + tape
   const laborPct = Number(settings.laborPercent || 0)
   const labor = material * (laborPct / 100)
-  return { ...m, panel, tape, material, labor, cost: material + labor }
+  const hw = hardwareCost(item, settings)
+  return { ...m, ...hw, panel, tape, material, labor, cost: material + labor + hw.hardware }
 }
 
 export function rateioCtx(furniture, settings, sheets, basis) {
@@ -71,9 +90,10 @@ export function saleCalc(item, settings, ctx) {
   const material = panel + c.tape
   const laborPct = Number(settings.laborPercent || 0)
   const labor = material * (laborPct / 100)
-  const cost = material + labor
+  const hardware = Number(c.hardware || 0)
+  const cost = material + labor + hardware
   const salePerUnit = cost * (1 + margin / 100)
-  return { ...c, panel, material, labor, cost, margin, hasOverride, qty, salePerUnit, lineTotal: salePerUnit * qty, costLine: cost * qty }
+  return { ...c, panel, material, labor, hardware, cost, margin, hasOverride, qty, salePerUnit, lineTotal: salePerUnit * qty, costLine: cost * qty }
 }
 
 export function projectTotals(furniture, settings, ctx) {

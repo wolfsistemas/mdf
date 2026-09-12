@@ -47,6 +47,52 @@ const DESK_DRAWERS = () => [
 ]
 const MESA_SAIA = () => [cf('modesty', 'Saia / vedação'), nf('saiaH', 'Altura da saia mm')]
 
+export const PE_OPTIONS = [
+  ['nenhum', 'Sem pé'],
+  ['sapatinha', 'Sapatinha de MDF (corte)'],
+  ['regulavel', 'Pé regulável (compra)'],
+  ['rodizio', 'Rodízio (compra)']
+]
+
+export const PUXADOR_OPTIONS = [
+  ['nenhum', 'Sem puxador'],
+  ['concha', 'Concha'],
+  ['barra', 'Barra'],
+  ['botao', 'Botão'],
+  ['perfil', 'Perfil / cava']
+]
+
+export const PE_LABEL = Object.fromEntries(PE_OPTIONS)
+export const PUXADOR_LABEL = Object.fromEntries(PUXADOR_OPTIONS)
+
+const ACCESSORY_DEFAULTS = {
+  pe: 'nenhum',
+  peH: 80,
+  peQty: 4,
+  puxador: 'nenhum',
+  puxadorQty: 0
+}
+
+function accessoryFields(m) {
+  const peOpts = m.type === 'mesa' ? PE_OPTIONS.filter(([k]) => k !== 'sapatinha') : PE_OPTIONS
+  return [
+    sf('pe', 'Pés', peOpts),
+    nf('peH', 'Altura do pé mm'),
+    nf('peQty', 'Qtd de pés (0 = 4)'),
+    sf('puxador', 'Puxador', PUXADOR_OPTIONS),
+    nf('puxadorQty', 'Qtd de puxadores (0 = automática)')
+  ]
+}
+
+function withAccessories(m) {
+  if (m.type === 'avulso' || m.type === 'prateleira') return m
+  return {
+    ...m,
+    defaults: { ...ACCESSORY_DEFAULTS, ...m.defaults },
+    fields: [...(m.fields || []), ...accessoryFields(m)]
+  }
+}
+
 const COMMON_BOX_FIELDS = (hasDivs = false) => [
   nf('width', 'Largura mm'),
   nf('height', 'Altura mm'),
@@ -328,7 +374,9 @@ const MODEL_TAGS = {
 }
 
 const MODELS = CATALOG_GROUPS.flatMap((g) =>
-  g.models.map((m) => withDrawerHeight({ tags: MODEL_TAGS[`${m.type}:${m.variant}`] || [], ...m, group: g.group }))
+  g.models.map((m) =>
+    withAccessories(withDrawerHeight({ tags: MODEL_TAGS[`${m.type}:${m.variant}`] || [], ...m, group: g.group }))
+  )
 )
 
 export const CATALOG = MODELS
@@ -684,7 +732,44 @@ function generateNicho(item) {
   return buildBox(item, { width: W, height: H, depth: D, shelves, doors: 0, hasBack, carcassT: t, backT, divisors })
 }
 
-export function generateFurniturePieces(item) {
+function peQty(p) {
+  const n = nint(num(p, 'peQty', 0))
+  return n > 0 ? n : 4
+}
+
+function appendMdfFeet(out, item) {
+  const p = item.params || {}
+  if ((p.pe || 'nenhum') !== 'sapatinha') return out
+  const t = mm(num(p, 'carcassT', num(p, 'thickness', 15)))
+  const h = Math.max(40, mm(num(p, 'peH', 80)))
+  const w = Math.max(60, Math.min(120, t * 4))
+  push(out, part('Pé / sapatinha', h, w, t, peQty(p), 'comprimento', tEdge))
+  return out
+}
+
+export function hardwareCounts(item) {
+  const p = item.params || {}
+  const type = item.type
+  if (type === 'avulso' || type === 'prateleira') {
+    return { handles: 0, hinges: 0, slides: 0, tracks: 0, feetBuy: 0, pe: 'nenhum', puxador: 'nenhum' }
+  }
+  const doors = nint(num(p, 'doors', 0))
+  const drawers = type === 'mesa' || type === 'gaveteiro' || type === 'armario' || type === 'guarda-roupa' ? nint(num(p, 'gavetas', 0)) : 0
+  const sliding = p.doorStyle === 'correr'
+  const openDoors = sliding ? 0 : doors
+  const pe = p.pe || 'nenhum'
+  const puxador = p.puxador || 'nenhum'
+  const autoHandles = openDoors + drawers
+  const handleOverride = nint(num(p, 'puxadorQty', 0))
+  const handles = puxador === 'nenhum' || puxador === 'perfil' ? 0 : handleOverride > 0 ? handleOverride : autoHandles
+  const hinges = openDoors * 2
+  const slides = drawers
+  const tracks = sliding && doors > 0 ? 1 : 0
+  const feetBuy = pe === 'regulavel' || pe === 'rodizio' ? peQty(p) : 0
+  return { handles, hinges, slides, tracks, feetBuy, pe, puxador, doors, drawers, sliding }
+}
+
+function generateCorePieces(item) {
   const p = item.params || {}
   const type = item.type
   const variant = item.variant || ''
@@ -709,6 +794,10 @@ export function generateFurniturePieces(item) {
     })
   }
   return []
+}
+
+export function generateFurniturePieces(item) {
+  return appendMdfFeet(generateCorePieces(item), item)
 }
 
 export function flattenProjectPieces(project) {
@@ -746,11 +835,15 @@ export function furnitureSummaryLine(item) {
     const bits = [`${mm(p.width)} × ${mm(p.depth)} × ${mm(p.height || 750)} mm`]
     if (p.retLen) bits.push(`retorno ${mm(p.retLen)}`)
     if (p.gavetas) bits.push(`${nint(p.gavetas)} gav.`)
+    if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
+    if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
     return bits.join(' · ')
   }
   const bits = [`${mm(p.width)} × ${mm(p.height || 0)} × ${mm(p.depth)} mm`]
   if (p.doors) bits.push(`${nint(p.doors)} porta(s)`)
   if (p.gavetas) bits.push(`${nint(p.gavetas)} gav.`)
   if (p.shelves) bits.push(`${nint(p.shelves)} prat.`)
+  if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
+  if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
   return bits.join(' · ')
 }

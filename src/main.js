@@ -24,7 +24,9 @@ import {
   createFurniture,
   fieldsFor,
   flattenProjectPieces,
-  furnitureSummaryLine
+  furnitureSummaryLine,
+  PE_LABEL,
+  PUXADOR_LABEL
 } from './catalog.js'
 import { schematicSvg } from './schematic.js'
 import { saleCalc as calcItemSale, projectTotals as calcProjectTotals, rateioCtx as calcRateioCtx, panelPricePerM2, sheetAreaM2 } from './pricing.js'
@@ -345,6 +347,7 @@ function specBullets(item) {
       out.push(`${g} ${g === 1 ? 'gaveta' : 'gavetas'}${numP(p, 'gavH') > 0 ? ` com ${Math.round(numP(p, 'gavH'))} mm de altura` : ' com frente regulável'} em coluna lateral`)
     }
     if (p.shelf) out.push('Com prateleira inferior de apoio')
+    out.push(...accessoryBullets(item))
     return out
   }
   if (type === 'prateleira') {
@@ -369,6 +372,41 @@ function specBullets(item) {
   if (p.hasBack === false || p.hasBack === 0) out.push('Sem fundo (aberto)')
   const extra = (item.extraPieces || []).length
   if (extra) out.push(`${extra} ${extra === 1 ? 'peça extra' : 'peças extras'} inclusa(s)`)
+  out.push(...accessoryBullets(item))
+  return out
+}
+
+function hardwareHelp(s) {
+  const n = Number(s.hardware || 0)
+  if (!(n > 0)) return 'Sem ferragens neste item.'
+  const bits = []
+  if (s.hinges) bits.push(`${s.hinges} dobradiça(s)`)
+  if (s.slides) bits.push(`${s.slides} par(es) de corrediça`)
+  if (s.handles) bits.push(`${s.handles} puxador(es)`)
+  if (s.tracks) bits.push(`${s.tracks} trilho(s)`)
+  if (s.feetBuy) bits.push(`${s.feetBuy} pé(s) comprado(s)`)
+  return `Ferragens ${formatMoney(n)}${bits.length ? ' · ' + bits.join(' · ') : ''}.`
+}
+
+function hardwareTotalLine() {
+  const items = furnitureList()
+  let total = 0
+  for (const f of items) total += Number(saleCalc(f).hardware || 0) * Math.max(1, Number(f.qty) || 1)
+  if (!(total > 0)) return null
+  return costLine('Ferragens e acessórios', 'dobradiça, corrediça, puxador, trilho e pé comprado', formatMoney(total))
+}
+
+function accessoryBullets(item) {
+  const p = item.params || {}
+  const out = []
+  const pe = p.pe || 'nenhum'
+  if (pe !== 'nenhum') {
+    const n = Math.max(1, qtyInt(p.peQty) || 4)
+    const h = Math.round(numP(p, 'peH', 80))
+    out.push(`${n} ${PE_LABEL[pe] || pe}${pe === 'sapatinha' ? ` de ${h} mm` : ''}`)
+  }
+  const px = p.puxador || 'nenhum'
+  if (px !== 'nenhum') out.push(`Puxador: ${PUXADOR_LABEL[px] || px}`)
   return out
 }
 
@@ -1641,7 +1679,7 @@ function editorModalMobile() {
       params.length
         ? h('div', { class: 'card' }, [
             h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), h('span', { class: 'help' }, [materialLine()])]),
-            h('div', { class: 'param-grid', style: 'margin-top:6px' }, params.map((f) => paramField(item, f)))
+            h('div', { class: 'param-grid', style: 'margin-top:6px' }, params.filter((f) => !isParamHidden(item, f)).map((f) => paramField(item, f)))
           ])
         : null,
       h('p', { class: 'help step-tip' }, ['Ajuste medidas e opções — o custo é recalculado a cada mudança.'])
@@ -1684,11 +1722,11 @@ function editorModalMobile() {
       h('div', { class: 'card money-card' }, [
         h('h3', {}, ['Custo e venda deste item']),
         h('div', { class: 'money-grid' }, [
-          h('div', {}, [h('label', {}, ['Custo de material (1 un.)']), h('strong', {}, [formatMoney(s.cost)])]),
+          h('div', {}, [h('label', {}, ['Custo (1 un.)']), h('strong', {}, [formatMoney(s.cost)])]),
           h('div', {}, [h('label', {}, ['Margem aplicada']), h('strong', {}, [`${s.margin.toFixed(0)}%`])]),
           h('div', {}, [h('label', {}, ['Valor de venda (1 un.)']), h('strong', { class: 'accent' }, [formatMoney(s.salePerUnit)])])
         ]),
-        h('p', { class: 'help' }, ['Margem é configurada na aba Custos (por item) ou no padrão global em Config.']),
+        h('p', { class: 'help' }, [hardwareHelp(s), ' Margem é configurada na aba Custos (por item) ou no padrão global em Config.']),
         rateioActive ? h('p', { class: 'help' }, ['Este orçamento usa "incluir custo das sobras": o custo acima já soma a parcela rateada da sobra das chapas.']) : null
       ]),
       h('p', { class: 'help center' }, [`${generated.length} tipo(s) de peça no corte${isNew ? ' — nada foi salvo ainda' : ''}.`])
@@ -1778,11 +1816,11 @@ function editorModalDesktop() {
           h('div', { class: 'card money-card' }, [
             h('h3', {}, ['Custo e venda deste item']),
             h('div', { class: 'money-grid' }, [
-              h('div', {}, [h('label', {}, ['Custo de material (1 un.)']), h('strong', {}, [formatMoney(s.cost)])]),
+          h('div', {}, [h('label', {}, ['Custo (1 un.)']), h('strong', {}, [formatMoney(s.cost)])]),
               h('div', {}, [h('label', {}, ['Margem aplicada']), h('strong', {}, [`${s.margin.toFixed(0)}%`])]),
               h('div', {}, [h('label', {}, ['Valor de venda (1 un.)']), h('strong', { class: 'accent' }, [formatMoney(s.salePerUnit)])])
             ]),
-            h('p', { class: 'help' }, ['Margem é configurada na aba Custos (por item) ou no padrão global em Config.']),
+            h('p', { class: 'help' }, [hardwareHelp(s), ' Margem é configurada na aba Custos (por item) ou no padrão global em Config.']),
             rateioActive ? h('p', { class: 'help' }, ['Este orçamento usa "incluir custo das sobras": o custo acima já soma a parcela rateada da sobra das chapas.']) : null
           ])
         ])
@@ -1814,6 +1852,15 @@ function isParamHidden(item, f) {
   if (f.key === 'frontT') return noDrawers
   if (f.key === 'doorT') return !Number(p.doors || 0) && noDrawers
   if (f.key === 'backT') return !Number(p.hasBack ?? 1)
+  const pe = p.pe || 'nenhum'
+  if (f.key === 'pe' || f.key === 'peH' || f.key === 'peQty') {
+    if (item.variant === 'aereo' || item.variant === 'espelheira') return true
+  }
+  if (f.key === 'peH' || f.key === 'peQty') return pe === 'nenhum'
+  if (f.key === 'puxadorQty') {
+    const px = p.puxador || 'nenhum'
+    return px === 'nenhum' || px === 'perfil'
+  }
   return false
 }
 
@@ -2030,7 +2077,7 @@ function tabCustos() {
                     td(String(s.pieceCount)),
                     td(s.areaM2.toFixed(3)),
                     td(formatMeters(s.tapeM)),
-                    td(h('span', { title: `Painel ${formatMoney(s.panel)} · fita ${formatMoney(s.tape)} · mão de obra ${formatMoney(s.labor)}` }, [formatMoney(s.cost)])),
+                    td(h('span', { title: `Painel ${formatMoney(s.panel)} · fita ${formatMoney(s.tape)} · ferragens ${formatMoney(s.hardware || 0)} · mão de obra ${formatMoney(s.labor)}` }, [formatMoney(s.cost)])),
                     td(
                       h('div', { class: 'margin-cell' }, [
                         h('input', {
@@ -2093,6 +2140,7 @@ function closingCard() {
     h('h2', {}, ['Fechamento da obra (custo real de chapa)']),
     costLine('Chapas compradas', `${s.sheets} × ${formatMoney(Number(set.sheetPrice || 0))}`, formatMoney(s.sheetCost)),
     costLine('Fita de borda', `${formatMeters(s.tapeM)} × ${formatMoney(Number(set.tapePricePerMeter || 0))}/m`, formatMoney(s.tapeCost)),
+    hardwareTotalLine(),
     Number(set.laborPercent)
       ? costLine('Mão de obra / perda extra', `${set.laborPercent}% sobre material`, formatMoney(s.labor || 0))
       : null,
@@ -2368,6 +2416,19 @@ function tabConta() {
         field('Preço por metro', inputNum(s.tapePricePerMeter, (v) => set({ tapePricePerMeter: v }), { step: '0.01' }))
       ]),
       presetRow('Modelos', TAPE_PRESETS, (name) => set({ tapeName: name }))
+    ]),
+    h('div', { class: 'card' }, [
+      h('h2', {}, ['Ferragens e acessórios (preço unitário)']),
+      h('div', { class: 'row' }, [
+        field('Dobradiça', inputNum(s.hingePrice || 0, (v) => set({ hingePrice: v }), { step: '0.01' })),
+        field('Corrediça (par)', inputNum(s.slidePrice || 0, (v) => set({ slidePrice: v }), { step: '0.01' })),
+        field('Puxador', inputNum(s.handlePrice || 0, (v) => set({ handlePrice: v }), { step: '0.01' })),
+        field('Trilho de correr', inputNum(s.trackPrice || 0, (v) => set({ trackPrice: v }), { step: '0.01' })),
+        field('Pé regulável / rodízio', inputNum(s.footPrice || 0, (v) => set({ footPrice: v }), { step: '0.01' }))
+      ]),
+      h('p', { class: 'help' }, [
+        'Dobradiça: 2 por porta de abrir. Corrediça: 1 par por gaveta. Puxador: 1 por porta/gaveta (0 = automático). Pé de MDF entra no plano de corte; regulável e rodízio entram só no custo.'
+      ])
     ])
   ])
 }
