@@ -25,8 +25,9 @@ import {
   fieldsFor,
   flattenProjectPieces,
   furnitureSummaryLine,
-  PE_LABEL,
-  PUXADOR_LABEL
+  hardwareCounts,
+  PUXADOR_LABEL,
+  ACCESSORY_KEYS
 } from './catalog.js'
 import { schematicSvg } from './schematic.js'
 import { saleCalc as calcItemSale, projectTotals as calcProjectTotals, rateioCtx as calcRateioCtx, panelPricePerM2, sheetAreaM2 } from './pricing.js'
@@ -403,10 +404,17 @@ function accessoryBullets(item) {
   if (pe !== 'nenhum') {
     const n = Math.max(1, qtyInt(p.peQty) || 4)
     const h = Math.round(numP(p, 'peH', 80))
-    out.push(`${n} ${PE_LABEL[pe] || pe}${pe === 'sapatinha' ? ` de ${h} mm` : ''}`)
+    if (pe === 'sapatinha') out.push(`${n} sapatinha${n === 1 ? '' : 's'} de MDF (${h} mm)`)
+    else if (pe === 'regulavel') out.push(`${n} pé${n === 1 ? '' : 's'} regulável${n === 1 ? '' : 'is'}`)
+    else if (pe === 'rodizio') out.push(`${n} rodízio${n === 1 ? '' : 's'}`)
   }
   const px = p.puxador || 'nenhum'
-  if (px !== 'nenhum') out.push(`Puxador: ${PUXADOR_LABEL[px] || px}`)
+  if (px === 'perfil') out.push('Puxador perfil / cava')
+  else if (px !== 'nenhum') out.push(`Puxador ${String(PUXADOR_LABEL[px] || px).toLowerCase()}`)
+  const hw = hardwareCounts(item)
+  if (hw.hinges) out.push(`${hw.hinges} ${hw.hinges === 1 ? 'dobradiça' : 'dobradiças'}`)
+  if (hw.slides) out.push(`${hw.slides} ${hw.slides === 1 ? 'par de corrediça' : 'pares de corrediça'}`)
+  if (hw.tracks) out.push(`${hw.tracks === 1 ? 'Trilho de correr' : hw.tracks + ' trilhos de correr'}`)
   return out
 }
 
@@ -1647,7 +1655,6 @@ function editorModalMobile() {
   const s = saleCalcForStaged(item)
   const rateioActive = projectBillingBasis() === 'rateio'
   const generated = flattenProjectPieces({ furniture: [{ ...item, qty: 1 }] })
-  const params = fieldsFor(item).filter((f) => !isParamHidden(item, f))
   const stepsHeader = h(
     'div',
     { class: 'editor-steps', role: 'tablist' },
@@ -1676,12 +1683,7 @@ function editorModalMobile() {
           field('Quantidade', inputNum(item.qty || 1, (v) => updateFurniture(item.id, { qty: Math.max(1, v) }), { min: '1' }))
         ])
       ]),
-      params.length
-        ? h('div', { class: 'card' }, [
-            h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), h('span', { class: 'help' }, [materialLine()])]),
-            h('div', { class: 'param-grid', style: 'margin-top:6px' }, params.filter((f) => !isParamHidden(item, f)).map((f) => paramField(item, f)))
-          ])
-        : null,
+      ...paramCards(item, materialLine()),
       h('p', { class: 'help step-tip' }, ['Ajuste medidas e opções — o custo é recalculado a cada mudança.'])
     ]
   } else if (step === 1) {
@@ -1806,12 +1808,7 @@ function editorModalDesktop() {
               field('Cor / identificação', h('input', { type: 'color', value: item.color, onChange: (e) => updateFurniture(item.id, { color: e.target.value }) }))
             ])
           ]),
-          fieldsFor(item).length
-            ? h('div', { class: 'card' }, [
-                h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), h('span', { class: 'help' }, [materialLine()])]),
-                h('div', { class: 'param-grid', style: 'margin-top:6px' }, fieldsFor(item).filter((f) => !isParamHidden(item, f)).map((f) => paramField(item, f)))
-              ])
-            : null,
+          ...paramCards(item, materialLine()),
           extraPiecesBlock(item),
           h('div', { class: 'card money-card' }, [
             h('h3', {}, ['Custo e venda deste item']),
@@ -1847,16 +1844,23 @@ function isParamHidden(item, f) {
   if (f.kind === 'check') return false
   const p = item.params || {}
   const noDrawers = !Number(p.gavetas || 0)
+  const noDoors = item.type !== 'armario' && item.type !== 'guarda-roupa' ? true : !Number(p.doors || 0)
   if (f.key === 'gavH' || f.key === 'pedW' || f.key === 'drawerBase') return noDrawers
   if (f.key === 'baseH') return noDrawers || p.drawerBase !== 'alto'
   if (f.key === 'frontT') return noDrawers
-  if (f.key === 'doorT') return !Number(p.doors || 0) && noDrawers
+  if (f.key === 'doorT') return noDoors && noDrawers
   if (f.key === 'backT') return !Number(p.hasBack ?? 1)
+  const peOff = item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno'
   const pe = p.pe || 'nenhum'
   if (f.key === 'pe' || f.key === 'peH' || f.key === 'peQty') {
-    if (item.variant === 'aereo' || item.variant === 'espelheira') return true
+    if (peOff) return true
   }
-  if (f.key === 'peH' || f.key === 'peQty') return pe === 'nenhum'
+  if (f.key === 'peH') return pe !== 'sapatinha'
+  if (f.key === 'peQty') return pe === 'nenhum'
+  if (f.key === 'puxador' || f.key === 'puxadorQty') {
+    if (item.type === 'nicho') return true
+    if (noDoors && noDrawers && item.type !== 'gaveteiro') return true
+  }
   if (f.key === 'puxadorQty') {
     const px = p.puxador || 'nenhum'
     return px === 'nenhum' || px === 'perfil'
@@ -1864,8 +1868,35 @@ function isParamHidden(item, f) {
   return false
 }
 
+function paramCards(item, material) {
+  const all = fieldsFor(item).filter((f) => !isParamHidden(item, f))
+  if (!all.length) return []
+  const rest = all.filter((f) => !ACCESSORY_KEYS.includes(f.key))
+  const acc = all.filter((f) => ACCESSORY_KEYS.includes(f.key))
+  const cards = []
+  if (rest.length) {
+    cards.push(
+      h('div', { class: 'card' }, [
+        h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), material ? h('span', { class: 'help' }, [material]) : null]),
+        h('div', { class: 'param-grid', style: 'margin-top:6px' }, rest.map((f) => paramField(item, f)))
+      ])
+    )
+  }
+  if (acc.length) {
+    cards.push(
+      h('div', { class: 'card' }, [
+        h('h3', {}, ['Pés, puxador e ferragens']),
+        h('p', { class: 'help' }, ['Pé de MDF entra no corte. Regulável, rodízio, puxador, dobradiça e corrediça entram no custo (preços na aba Conta).']),
+        h('div', { class: 'param-grid', style: 'margin-top:6px' }, acc.map((f) => paramField(item, f)))
+      ])
+    )
+  }
+  return cards
+}
+
 function paramField(item, f) {
-  const val = item.params?.[f.key]
+  let val = item.params?.[f.key]
+  if ((f.key === 'pe' || f.key === 'puxador') && (val == null || val === '')) val = 'nenhum'
   if (f.kind === 'check') {
     return h('label', { class: 'check-field' }, [
       h('input', {
@@ -2427,7 +2458,7 @@ function tabConta() {
         field('Pé regulável / rodízio', inputNum(s.footPrice || 0, (v) => set({ footPrice: v }), { step: '0.01' }))
       ]),
       h('p', { class: 'help' }, [
-        'Dobradiça: 2 por porta de abrir. Corrediça: 1 par por gaveta. Puxador: 1 por porta/gaveta (0 = automático). Pé de MDF entra no plano de corte; regulável e rodízio entram só no custo.'
+        'Dobradiça: 2 por porta de abrir (3 se a porta passar de 1800 mm). Corrediça: 1 par por gaveta. Puxador: 1 por porta ou gaveta. Pé de MDF entra no corte; regulável e rodízio só no custo.'
       ])
     ])
   ])

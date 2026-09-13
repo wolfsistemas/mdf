@@ -49,9 +49,9 @@ const MESA_SAIA = () => [cf('modesty', 'Saia / vedação'), nf('saiaH', 'Altura 
 
 export const PE_OPTIONS = [
   ['nenhum', 'Sem pé'],
-  ['sapatinha', 'Sapatinha de MDF (corte)'],
-  ['regulavel', 'Pé regulável (compra)'],
-  ['rodizio', 'Rodízio (compra)']
+  ['sapatinha', 'Sapatinha de MDF'],
+  ['regulavel', 'Pé regulável'],
+  ['rodizio', 'Rodízio']
 ]
 
 export const PUXADOR_OPTIONS = [
@@ -61,6 +61,8 @@ export const PUXADOR_OPTIONS = [
   ['botao', 'Botão'],
   ['perfil', 'Perfil / cava']
 ]
+
+export const ACCESSORY_KEYS = ['pe', 'peH', 'peQty', 'puxador', 'puxadorQty']
 
 export const PE_LABEL = Object.fromEntries(PE_OPTIONS)
 export const PUXADOR_LABEL = Object.fromEntries(PUXADOR_OPTIONS)
@@ -737,14 +739,26 @@ function peQty(p) {
   return n > 0 ? n : 4
 }
 
+function skipFeet(item) {
+  return item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno'
+}
+
 function appendMdfFeet(out, item) {
   const p = item.params || {}
-  if ((p.pe || 'nenhum') !== 'sapatinha') return out
+  if (skipFeet(item) || (p.pe || 'nenhum') !== 'sapatinha') return out
   const t = mm(num(p, 'carcassT', num(p, 'thickness', 15)))
   const h = Math.max(40, mm(num(p, 'peH', 80)))
   const w = Math.max(60, Math.min(120, t * 4))
   push(out, part('Pé / sapatinha', h, w, t, peQty(p), 'comprimento', tEdge))
   return out
+}
+
+function hingesPerDoor(item) {
+  const p = item.params || {}
+  const H = mm(num(p, 'height', 1800))
+  const zoneH = mm(num(p, 'zoneH', 0))
+  const doorH = zoneH > 0 ? Math.max(0, H - zoneH) : H
+  return doorH > 1800 ? 3 : 2
 }
 
 export function hardwareCounts(item) {
@@ -753,16 +767,16 @@ export function hardwareCounts(item) {
   if (type === 'avulso' || type === 'prateleira') {
     return { handles: 0, hinges: 0, slides: 0, tracks: 0, feetBuy: 0, pe: 'nenhum', puxador: 'nenhum' }
   }
-  const doors = nint(num(p, 'doors', 0))
-  const drawers = type === 'mesa' || type === 'gaveteiro' || type === 'armario' || type === 'guarda-roupa' ? nint(num(p, 'gavetas', 0)) : 0
+  const doors = type === 'armario' || type === 'guarda-roupa' ? nint(num(p, 'doors', 0)) : 0
+  const drawers =
+    type === 'mesa' || type === 'gaveteiro' || type === 'armario' || type === 'guarda-roupa' ? nint(num(p, 'gavetas', 0)) : 0
   const sliding = p.doorStyle === 'correr'
-  const openDoors = sliding ? 0 : doors
-  const pe = p.pe || 'nenhum'
+  const pe = skipFeet(item) ? 'nenhum' : p.pe || 'nenhum'
   const puxador = p.puxador || 'nenhum'
-  const autoHandles = openDoors + drawers
+  const autoHandles = doors + drawers
   const handleOverride = nint(num(p, 'puxadorQty', 0))
   const handles = puxador === 'nenhum' || puxador === 'perfil' ? 0 : handleOverride > 0 ? handleOverride : autoHandles
-  const hinges = openDoors * 2
+  const hinges = sliding ? 0 : doors * hingesPerDoor(item)
   const slides = drawers
   const tracks = sliding && doors > 0 ? 1 : 0
   const feetBuy = pe === 'regulavel' || pe === 'rodizio' ? peQty(p) : 0
