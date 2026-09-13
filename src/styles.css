@@ -1185,6 +1185,15 @@ input[type="color"] {
   text-overflow: ellipsis;
 }
 
+.top-home {
+  color: inherit;
+  text-decoration: none;
+}
+
+.top-home:hover strong {
+  color: var(--gold);
+}
+
 .top-title span {
   color: var(--muted);
   font-size: 11px;

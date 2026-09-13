@@ -373,6 +373,7 @@ body.landing-mode {
 .lsection {
   padding: 66px 0;
   border-bottom: 1px solid var(--line);
+  scroll-margin-top: 72px;
 }
 
 .lsection h2 {

@@ -19,12 +19,12 @@ export function landingHTML() {
 <div class="landing">
   <header class="lnav">
     <div class="lnav-in">
-      <a class="lmark" href="#/app"><span class="lmark-b">MDF</span><span class="lmark-w">ATELIER</span></a>
+      <a class="lmark" href="#/"><span class="lmark-b">MDF</span><span class="lmark-w">ATELIER</span></a>
       <nav class="lnav-links">
-        <a href="#recursos">Recursos</a>
-        <a href="#como-funciona">Como funciona</a>
-        <a href="#planos">Planos</a>
-        <a href="#faq">FAQ</a>
+        <a href="#/recursos">Recursos</a>
+        <a href="#/como-funciona">Como funciona</a>
+        <a href="#/planos">Planos</a>
+        <a href="#/faq">FAQ</a>
       </nav>
       <a class="btn-l primary" href="#/app">Abrir o app</a>
     </div>
@@ -42,9 +42,9 @@ export function landingHTML() {
         </p>
         <div class="lcta">
           <a class="btn-l primary big" href="#/app">Testar grátis</a>
-          <a class="btn-l ghost big" href="#planos">Ver planos</a>
+          <a class="btn-l ghost big" href="#/planos">Ver planos</a>
         </div>
-        <p class="lmini">Sem cartão de crédito · Funciona no navegador · Seus dados ficam com você</p>
+        <p class="lmini">Sem cartão no Grátis · Cancele o Pro quando quiser · Seus dados ficam com você</p>
       </div>
       <div class="lhero-visual">
         <div class="lpage">
@@ -103,7 +103,7 @@ export function landingHTML() {
         </div>
         <div class="lcard">
           <h3>Catálogo de móveis prontos</h3>
-          <p>Armários, guarda-roupas, mesas e mais. Ajuste medidas e gavetas em minutos — ou cadastre peças avulsas.</p>
+          <p>Armários, guarda-roupas, cozinha, mesas e mais. Ajuste medidas, pés e puxadores em minutos — ou cadastre peças avulsas.</p>
         </div>
         <div class="lcard">
           <h3>Sua marca no papel</h3>
@@ -153,6 +153,7 @@ export function landingHTML() {
             <li>Logo da sua marcenaria no documento</li>
             <li>Nome, WhatsApp e QR no orçamento</li>
             <li>Tudo do Grátis, sem o teto de 3</li>
+            <li>Cancele quando quiser na aba Conta</li>
           </ul>
           <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
         </div>
@@ -201,9 +202,9 @@ export function landingHTML() {
         <p class="lf-tag">Software para marcenarias de móveis planejados.</p>
       </div>
       <nav>
-        <a href="#recursos">Recursos</a>
-        <a href="#planos">Planos</a>
-        <a href="#faq">FAQ</a>
+        <a href="#/recursos">Recursos</a>
+        <a href="#/planos">Planos</a>
+        <a href="#/faq">FAQ</a>
         <a href="#/termos">Termos</a>
         <a href="#/privacidade">Privacidade</a>
         <a href="#/app">Entrar no app</a>
@@ -219,9 +220,9 @@ function legalShell(title, body) {
 <div class="landing">
   <header class="lnav">
     <div class="lnav-in">
-      <a class="lmark" href="#"><span class="lmark-b">MDF</span><span class="lmark-w">ATELIER</span></a>
+      <a class="lmark" href="#/"><span class="lmark-b">MDF</span><span class="lmark-w">ATELIER</span></a>
       <nav class="lnav-links">
-        <a href="#">Início</a>
+        <a href="#/">Início</a>
         <a href="#/app">Abrir o app</a>
       </nav>
       <a class="btn-l primary" href="#/app">Abrir o app</a>
@@ -231,7 +232,7 @@ function legalShell(title, body) {
     <div class="lwrap lwrap-narrow">
       <h1>${title}</h1>
       ${body}
-      <p class="llegal-back"><a href="#">Voltar ao início</a></p>
+      <p class="llegal-back"><a href="#/">Voltar ao início</a></p>
     </div>
   </section>
 </div>`

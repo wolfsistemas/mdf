@@ -583,6 +583,9 @@ function accountMenu() {
         h('span', {}, [authUser.email || syncLabel()])
       ]),
       isLimitedPlan(plan)
+        ? h('a', { class: 'btn small ghost', href: '#/' }, ['Site'])
+        : null,
+      isLimitedPlan(plan)
         ? h('button', { class: 'btn small primary', onClick: () => openUpgrade('Faça upgrade para criar quantos orçamentos quiser.') }, ['Upgrade'])
         : null,
       contaBtn,
@@ -592,7 +595,11 @@ function accountMenu() {
   const enter = cloudConfigured()
     ? h('button', { class: 'btn small primary', onClick: openAuth }, ['Entrar'])
     : null
-  return h('div', { class: 'account-menu' }, [contaBtn, enter])
+  return h('div', { class: 'account-menu' }, [
+    h('a', { class: 'btn small ghost', href: '#/' }, ['Site']),
+    contaBtn,
+    enter
+  ])
 }
 
 function openAuth() {
@@ -2359,6 +2366,7 @@ function tabConta() {
         ? h('div', { class: 'row', style: 'margin-top:10px' }, [h('button', { class: 'btn primary', onClick: openAuth }, ['Entrar ou criar conta'])])
         : null,
       h('div', { class: 'row', style: 'margin-top:12px;flex-wrap:wrap' }, [
+        isLimitedPlan(plan) ? h('a', { class: 'btn small ghost', href: '#/' }, ['Voltar ao site']) : null,
         h('a', { class: 'btn small ghost', href: supportHref(), target: '_blank', rel: 'noopener' }, [supportLabel()]),
         !isLimitedPlan(plan) && authUser
           ? h('button', { class: 'btn small ghost danger-side', onClick: cancelPlan }, ['Cancelar assinatura'])
@@ -2552,7 +2560,12 @@ function render() {
 
   const title =
     tab === 'projetos' || tab === 'conta' || !p
-      ? [h('strong', {}, ['MDF Atelier']), h('span', {}, [tab === 'conta' ? 'Configuração da conta' : 'Seus orçamentos'])]
+      ? [
+          isLimitedPlan(currentPlan())
+            ? h('a', { class: 'top-home', href: '#/' }, [h('strong', {}, ['MDF Atelier'])])
+            : h('strong', {}, ['MDF Atelier']),
+          h('span', {}, [tab === 'conta' ? 'Configuração da conta' : 'Seus orçamentos'])
+        ]
       : [
           h('strong', {}, [p.name]),
           h('span', {}, [`${(p.furniture || []).length} móvel(is) · ${(p.client && p.client) || 'sem cliente'} · `, new Date(p.createdAt).toLocaleDateString('pt-BR')])
@@ -2687,12 +2700,32 @@ function desiredScreen() {
   return 'landing'
 }
 
+function landingAnchor() {
+  const hash = location.hash || ''
+  if (!hash || hash === '#' || hash === '#/') return ''
+  if (hash.startsWith('#/app') || hash.startsWith('#/termos') || hash.startsWith('#/privacidade')) return ''
+  return hash.replace(/^#\/?/, '')
+}
+
+function scrollLanding() {
+  const id = landingAnchor()
+  if (!id) {
+    window.scrollTo(0, 0)
+    return
+  }
+  const el = document.getElementById(id)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  else window.scrollTo(0, 0)
+}
+
 function showScreen() {
   const desired = desiredScreen()
   if (currentScreen === desired) {
     if (desired === 'app') {
       consumeUpgradeIntent()
       consumePlanReturn()
+    } else if (desired === 'landing') {
+      scrollLanding()
     }
     return
   }
@@ -2730,7 +2763,8 @@ function showScreen() {
     root.innerHTML = ''
     const html = desired === 'termos' ? termosHTML() : desired === 'privacidade' ? privacidadeHTML() : landingHTML()
     root.insertAdjacentHTML('afterbegin', html)
-    window.scrollTo(0, 0)
+    if (desired === 'landing') scrollLanding()
+    else window.scrollTo(0, 0)
   }
 }
 
