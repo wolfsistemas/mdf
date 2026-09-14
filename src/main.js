@@ -893,6 +893,9 @@ function upgradeModal() {
       }
       const r = kind === 'once' ? await checkoutOnce(authUser.id, plan) : await subscribePlan(authUser.id, plan)
       if (r && r.url) {
+        if (!/^https:\/\/[^/]*\.?mercadopago\.com/i.test(r.url)) {
+          throw new Error('O Mercado Pago devolveu um link inesperado. Avise o suporte.')
+        }
         location.href = r.url
         return
       }

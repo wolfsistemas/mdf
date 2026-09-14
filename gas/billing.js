@@ -11,8 +11,11 @@
  *   SUPABASE_URL            https://xxxx.supabase.co
  *   SUPABASE_SERVICE_ROLE   service_role (nunca no front)
  *   PAYMENT_PROVIDER        mp
- *   MP_ACCESS_TOKEN         APP_USR-... (prod) ou TEST-... (sandbox)
- *   MP_USE_SANDBOX          true só em teste; vazio em produção
+ *   MP_ACCESS_TOKEN         APP_USR-... (prod) ou TEST-... (teste)
+ *
+ * Teste: use TEST-... + duas contas de teste (vendedor e comprador) e o
+ * init_point (produção). Não use sandbox_init_point: o sandbox do Checkout
+ * Pro serve página quebrada em vários casos. MP_USE_SANDBOX foi removido.
  *   EMAIL_LOG               e-mail de log (padrão wolfsaasbr@gmail.com)
  *   PRO_PRICE_CENTS         4900
  *   ULTRA_PRICE_CENTS       8900
@@ -121,10 +124,6 @@ function planAmount_(plan) {
   return cents / 100
 }
 
-function useSandbox_() {
-  return prop_('MP_USE_SANDBOX').toLowerCase() === 'true'
-}
-
 function mpToken_() {
   var t = prop_('MP_ACCESS_TOKEN')
   if (!t) throw new Error('MP_ACCESS_TOKEN ausente no GAS')
@@ -186,9 +185,19 @@ function mpCreatePlan(payload) {
   return { code: res.getResponseCode(), text: res.getContentText() }
 }
 
-function mpPlanCheckoutUrl(plan) {
-  if (useSandbox_() && plan.sandbox_init_point) return plan.sandbox_init_point
-  return plan.init_point || plan.sandbox_init_point || ''
+/**
+ * Sempre usa o init_point (checkout de produção). O sandbox do Checkout Pro
+ * é instável e serve uma página quebrada em vários casos. Para testar, use o
+ * init_point com duas contas de teste (vendedor + comprador).
+ */
+function mpCheckoutUrl(obj) {
+  if (!obj) return ''
+  return obj.init_point || obj.sandbox_init_point || ''
+}
+
+function mpSubscriptionUrl_(planId) {
+  if (!planId) return ''
+  return 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=' + encodeURIComponent(planId)
 }
 
 function loadProfile_(userId) {
@@ -272,7 +281,7 @@ function ensureMpPlan(userId, plan, redirectUrl) {
       var existingAmt = Number((existing.auto_recurring && existing.auto_recurring.transaction_amount) || 0)
       var samePrice = !want || Math.abs(existingAmt - want) < 0.05
       if (existing && String(existing.status || '') === 'active' && samePrice) {
-        var reuse = mpPlanCheckoutUrl(existing)
+        var reuse = mpCheckoutUrl(existing) || mpSubscriptionUrl_(existing.id)
         if (reuse) return { plan_id: String(existing.id), url: reuse }
       }
     } catch (err) {
@@ -313,7 +322,7 @@ function ensureMpPlan(userId, plan, redirectUrl) {
     notify('Falha ao criar plano MP (user ' + userId + ')', text)
     return { error: parsed.message || parsed.error || 'Mercado Pago recusou o plano', status: res.code }
   }
-  var checkoutUrl = mpPlanCheckoutUrl(parsed)
+  var checkoutUrl = mpCheckoutUrl(parsed) || mpSubscriptionUrl_(parsed.id)
   if (!checkoutUrl) {
     notify('Plano MP criado sem init_point (user ' + userId + ')', text)
     return { error: 'Mercado Pago não devolveu o link de assinatura', status: res.code }
@@ -368,7 +377,7 @@ function handleCheckout(body) {
     notify('Falha ao gerar checkout MP (user ' + userId + ')', String(err))
     return { ok: false, error: String((err && err.message) || err) }
   }
-  var url = mpPlanCheckoutUrl(parsed)
+  var url = mpCheckoutUrl(parsed)
   if (!url) return { ok: false, error: 'Mercado Pago não devolveu o link de pagamento' }
   return { ok: true, url: url, plan: plan, once: true }
 }

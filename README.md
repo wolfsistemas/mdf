@@ -140,7 +140,12 @@ O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
    deployment**. Sem esta cola, Assinar nao abre o Mercado Pago.
 3. Script Properties: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`,
    `PAYMENT_PROVIDER=mp`, `MP_ACCESS_TOKEN`, `PRO_PRICE_CENTS=4900`,
-   `ULTRA_PRICE_CENTS=8900`. Em teste: `MP_USE_SANDBOX=true`.
+   `ULTRA_PRICE_CENTS=8900`.
+   Para testar: `MP_ACCESS_TOKEN` de teste + duas contas de teste (vendedor
+   e comprador). O app sempre abre o `init_point` (checkout de producao,
+   aceita usuario de teste). Nao use sandbox: o `sandbox_init_point` do
+   Checkout Pro costuma abrir pagina quebrada. `MP_USE_SANDBOX` nao existe
+   mais.
 4. Painel MP → Webhooks na URL do GAS: eventos de Planos e assinaturas +
    `payment` (modo teste e, depois, producao).
 5. A URL `/exec` do GAS ja vai no app (`src/billing.js`) e no
