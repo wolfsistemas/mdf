@@ -82,7 +82,6 @@ let lastSyncOk = true
 let shareBusy = false
 let tourStep = 0
 let saveToastTimer = null
-let saveToastHide = null
 const groupOpen = {}
 CATALOG_GROUPS.forEach((g, i) => (groupOpen[g.group] = i === 0))
 
@@ -502,8 +501,69 @@ function swatch(color, inline) {
   return h('span', { class: 'swatch' + (inline ? ' inline' : ''), style: `background:${color}` })
 }
 
-function confirmDialog(message) {
-  return typeof window.confirm === 'function' ? window.confirm(message) : true
+let toastTimer = null
+
+function showToast(message, kind, ms) {
+  const el = document.createElement('div')
+  el.className = 'app-toast' + (kind ? ' ' + kind : '')
+  el.textContent = message
+  document.body.append(el)
+  requestAnimationFrame(() => el.classList.add('show'))
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    el.classList.remove('show')
+    setTimeout(() => el.remove(), 220)
+  }, ms || 3200)
+}
+
+function hideToast() {
+  document.querySelectorAll('.app-toast').forEach((el) => el.remove())
+}
+
+function confirmModal(message, opts) {
+  const o = opts || {}
+  return new Promise((resolve) => {
+    const backdrop = h('div', { class: 'modal-backdrop' })
+    const box = h('div', { class: 'modal modal-confirm' })
+    function done(val) {
+      document.removeEventListener('keydown', onKey)
+      backdrop.remove()
+      resolve(val)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') done(false)
+    }
+    const confirm = h(
+      'button',
+      {
+        class: 'btn ' + (o.danger ? 'danger' : 'primary'),
+        type: 'button',
+        onClick: () => done(true)
+      },
+      [o.confirmLabel || 'Confirmar']
+    )
+    box.append(
+      h('div', { class: 'modal-head' }, [
+        h('h2', {}, [o.title || 'Confirmar']),
+        h('button', { class: 'btn small ghost x', type: 'button', onClick: () => done(false) }, ['✕'])
+      ]),
+      h('div', { class: 'modal-body' }, [
+        o.icon ? h('div', { class: 'confirm-icon' }, [o.icon]) : null,
+        h('p', { class: 'confirm-msg' }, [message])
+      ]),
+      h('div', { class: 'modal-foot' }, [
+        h('button', { class: 'btn', type: 'button', onClick: () => done(false) }, [o.cancelLabel || 'Cancelar']),
+        confirm
+      ])
+    )
+    backdrop.append(box)
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) done(false)
+    })
+    document.addEventListener('keydown', onKey)
+    document.body.append(backdrop)
+    setTimeout(() => confirm.focus(), 0)
+  })
 }
 
 /* ============================== mobile ============================== */
@@ -627,8 +687,7 @@ async function cloudLogout() {
   authUser = null
   modal = null
   resetToGuest()
-  const toast = document.getElementById('save-toast')
-  if (toast) toast.classList.remove('show')
+  hideToast()
   const r = await cloudSignOut()
   if (r.error) console.warn(r.error)
   authUser = null
@@ -640,17 +699,7 @@ function showSavedToast(debounce) {
     const now = new Date()
     const hh = String(now.getHours()).padStart(2, '0')
     const mm = String(now.getMinutes()).padStart(2, '0')
-    let el = document.getElementById('save-toast')
-    if (!el) {
-      el = document.createElement('div')
-      el.id = 'save-toast'
-      el.className = 'save-toast'
-      document.body.append(el)
-    }
-    el.textContent = `Orçamento salvo automaticamente às ${hh}:${mm}`
-    el.classList.add('show')
-    clearTimeout(saveToastHide)
-    saveToastHide = setTimeout(() => el.classList.remove('show'), 2200)
+    showToast(`Orçamento salvo automaticamente às ${hh}:${mm}`, 'ok', 2200)
   }
   clearTimeout(saveToastTimer)
   if (debounce) {
@@ -947,8 +996,13 @@ function tabProjetos() {
           {
             class: 'btn small ghost danger-side',
             disabled: state.projects.length <= 1,
-            onClick: () => {
-              if (confirmDialog('Excluir este orçamento e todas as suas peças?')) removeProject(p.id)
+            onClick: async () => {
+              const ok = await confirmModal('Excluir este orçamento e todas as suas peças?', {
+                title: 'Excluir orçamento',
+                confirmLabel: 'Excluir',
+                danger: true
+              })
+              if (ok) removeProject(p.id)
             }
           },
           ['Excluir']
@@ -1341,8 +1395,13 @@ function budgetRow(f) {
   ])
 }
 
-function removeFromList(f) {
-  if (confirmDialog(`Excluir "${f.name}" deste orçamento?`)) removeFurniture(f.id)
+async function removeFromList(f) {
+  const ok = await confirmModal(`Excluir "${f.name}" deste orçamento?`, {
+    title: 'Excluir móvel',
+    confirmLabel: 'Excluir',
+    danger: true
+  })
+  if (ok) removeFurniture(f.id)
 }
 
 function totalsCard(t, p) {
@@ -1389,7 +1448,7 @@ function onLogoFile(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
   if (file.size > 800000) {
-    window.alert('Use uma imagem de até 800 KB.')
+    showToast('Use uma imagem de até 800 KB.', 'err')
     e.target.value = ''
     return
   }
@@ -1569,7 +1628,7 @@ function modalCancel() {
   refresh()
 }
 
-function modalRemove() {
+async function modalRemove() {
   const m = modal
   if (!m || m.kind !== 'edit') return
   if (!m.targetId) {
@@ -1577,7 +1636,12 @@ function modalRemove() {
     refresh()
     return
   }
-  if (confirmDialog(`Excluir "${m.staged.name}" deste orçamento?`)) removeFurniture(m.targetId)
+  const ok = await confirmModal(`Excluir "${m.staged.name}" deste orçamento?`, {
+    title: 'Excluir móvel',
+    confirmLabel: 'Excluir',
+    danger: true
+  })
+  if (ok) removeFurniture(m.targetId)
 }
 
 function pickerModal() {
@@ -2331,7 +2395,11 @@ async function cancelPlan() {
     openAuth()
     return
   }
-  if (!confirmDialog('Cancelar a assinatura Pro? A próxima cobrança não acontece. O período já pago segue até o vencimento.')) return
+  const ok = await confirmModal(
+    'Cancelar a assinatura Pro? A próxima cobrança não acontece. O período já pago segue até o vencimento.',
+    { title: 'Cancelar assinatura', confirmLabel: 'Cancelar assinatura', cancelLabel: 'Manter o Pro', danger: true }
+  )
+  if (!ok) return
   const overlay = document.createElement('div')
   overlay.className = 'capturing-overlay'
   overlay.textContent = 'Cancelando…'
@@ -2339,15 +2407,15 @@ async function cancelPlan() {
   try {
     const r = await cancelSubscription(authUser.id)
     if (r && r.canceled) {
-      window.alert('Assinatura cancelada. O Pro segue até o vencimento; depois a conta volta ao Grátis.')
+      showToast('Assinatura cancelada. O Pro segue até o vencimento.', 'ok', 5000)
       const synced = await syncSubscription(authUser.id).catch(() => null)
       if (synced) applyPlanPayload(synced)
       else render()
       return
     }
-    window.alert('Não deu para cancelar agora. Tente de novo ou fale com o suporte.')
+    showToast('Não deu para cancelar agora. Tente de novo ou fale com o suporte.', 'err', 5000)
   } catch (err) {
-    window.alert((err && err.message) || 'Não deu para cancelar agora.')
+    showToast((err && err.message) || 'Não deu para cancelar agora.', 'err', 6000)
   } finally {
     overlay.remove()
   }
@@ -2692,6 +2760,58 @@ function registerPwa() {
 let appStarted = false
 let currentScreen = null
 
+const SITE_ORIGIN = 'https://wolfsistemas.github.io'
+const BASE_PATH = import.meta.env.BASE_URL || '/'
+function siteUrl(hash) {
+  return SITE_ORIGIN + BASE_PATH.replace(/\/$/, '/') + (hash || '')
+}
+const SCREEN_META = {
+  landing: {
+    title: 'MDF Atelier — Orçamentos de móveis planejados',
+    desc: 'Monte o móvel, o app calcula chapas, sobras, fita e margem e gera o orçamento em PDF com a sua marca. Teste grátis.',
+    url: siteUrl('')
+  },
+  app: {
+    title: 'MDF Atelier — App do marceneiro',
+    desc: 'Monte móveis, calcule chapas, sobras e margem e gere o orçamento em PDF. Seus dados ficam com você.',
+    url: siteUrl('#/app')
+  },
+  termos: {
+    title: 'Termos de Uso — MDF Atelier',
+    desc: 'Condições de uso do MDF Atelier: conta, planos, cancelamento e responsabilidades.',
+    url: siteUrl('#/termos')
+  },
+  privacidade: {
+    title: 'Privacidade — MDF Atelier',
+    desc: 'Como o MDF Atelier trata seus dados: o que fica no aparelho, o que vai para a nuvem e como pedir exclusão.',
+    url: siteUrl('#/privacidade')
+  }
+}
+
+function setMeta(attr, key, value) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`)
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute(attr, key)
+    document.head.append(el)
+  }
+  el.setAttribute('content', value)
+}
+
+function setScreenMeta(screen) {
+  const m = SCREEN_META[screen] || SCREEN_META.landing
+  document.title = m.title
+  setMeta('property', 'og:title', m.title)
+  setMeta('property', 'og:description', m.desc)
+  setMeta('property', 'og:url', m.url)
+  setMeta('name', 'twitter:title', m.title)
+  setMeta('name', 'twitter:description', m.desc)
+  const desc = document.head.querySelector('meta[name="description"]')
+  if (desc) desc.setAttribute('content', m.desc)
+  const canonical = document.head.querySelector('link[rel="canonical"]')
+  if (canonical) canonical.setAttribute('href', m.url)
+}
+
 function desiredScreen() {
   const hash = location.hash || ''
   if (hash.startsWith('#/app') || hashHasPlanOk()) return 'app'
@@ -2730,6 +2850,7 @@ function showScreen() {
     return
   }
   currentScreen = desired
+  setScreenMeta(desired)
   const root = document.getElementById('app')
   document.body.style.overflow = ''
   if (desired === 'app') {

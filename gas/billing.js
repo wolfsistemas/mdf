@@ -373,22 +373,57 @@ function handleCheckout(body) {
   return { ok: true, url: url, plan: plan, once: true }
 }
 
-function handleCancel(body) {
-  var userId = userIdOf_(body)
-  if (!uuidOk_(userId)) return { ok: false, error: 'user_id inválido' }
-  var row = loadProfile_(userId)
-  if (!row) return { ok: false, error: 'Perfil não encontrado' }
-  var subId = String(row.mp_subscription_id || '')
-  if (!subId) return { ok: false, error: 'Esta conta não possui assinatura registrada' }
+function findSubscriptionId_(row) {
+  var planId = String(row.mp_plan_id || '')
+  if (!planId) return ''
   try {
-    mpFetch('/preapproval/' + encodeURIComponent(subId), 'put', { status: 'canceled' })
+    var res = UrlFetchApp.fetch(
+      'https://api.mercadopago.com/preapproval/search?preapproval_plan_id=' +
+        encodeURIComponent(planId) +
+        '&status=authorized&limit=1',
+      {
+        method: 'get',
+        headers: { Authorization: 'Bearer ' + mpToken_() },
+        muteHttpExceptions: true
+      }
+    )
+    if (res.getResponseCode() >= 300) return ''
+    var data = JSON.parse(res.getContentText() || '{}')
+    var found = (data.results || [])[0]
+    return found && found.id ? String(found.id) : ''
   } catch (err) {
-    notify('Falha ao cancelar assinatura (user ' + userId + ')', String(err))
+    return ''
+  }
+}
+
+function handleCancel(body) {
+  try {
+    var userId = userIdOf_(body)
+    if (!uuidOk_(userId)) return { ok: false, error: 'user_id inválido' }
+    var row = loadProfile_(userId)
+    if (!row) return { ok: false, error: 'Perfil não encontrado' }
+    var subId = String(row.mp_subscription_id || '') || findSubscriptionId_(row)
+    if (!subId) {
+      return {
+        ok: false,
+        error: 'Nenhuma assinatura recorrente ativa no Mercado Pago. Se o Pro veio de um pagamento avulso, não há cobrança para cancelar.'
+      }
+    }
+    try {
+      mpFetch('/preapproval/' + encodeURIComponent(subId), 'put', { status: 'canceled' })
+    } catch (err) {
+      if (!isNotFound(err)) {
+        notify('Falha ao cancelar assinatura (user ' + userId + ')', String(err))
+        return { ok: false, error: String((err && err.message) || err) }
+      }
+    }
+    patchProfile_(userId, { mp_subscription_id: subId, mp_subscription_status: 'canceled' })
+    notify('Assinatura cancelada', 'user=' + userId + '\nsub=' + subId)
+    return { ok: true, canceled: true, subscription_id: subId }
+  } catch (err) {
+    notify('Falha ao cancelar assinatura (user ' + userIdOf_(body) + ')', String((err && err.stack) || err))
     return { ok: false, error: String((err && err.message) || err) }
   }
-  patchProfile_(userId, { mp_subscription_status: 'canceled' })
-  notify('Assinatura cancelada', 'user=' + userId + '\nsub=' + subId)
-  return { ok: true, canceled: true, subscription_id: subId }
 }
 
 function handleSync(body) {
@@ -642,7 +677,8 @@ function doPost(e) {
     log.error = String((err && err.stack) || err)
     safeLog(log)
     notify('Erro em ' + log.action + ' - ' + String((err && err.message) || err), JSON.stringify(log, null, 2))
-    throw err
+    if (log.action === 'webhook_mp') throw err
+    return jsonOut({ ok: false, error: String((err && err.message) || err) })
   }
 }
 

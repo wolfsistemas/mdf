@@ -3180,6 +3180,76 @@ td strong.gold {
   }
 }
 
+.app-toast {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translate(-50%, -12px);
+  z-index: 200;
+  background: #1c6b3f;
+  color: #f4fff8;
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  text-align: center;
+  max-width: min(92vw, 460px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.app-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.app-toast.err {
+  background: #8a2f22;
+  color: #fff2ee;
+}
+
+.app-toast.info {
+  background: #241d15;
+  color: #f3ece3;
+  border: 1px solid var(--line-2);
+}
+
+@media (max-width: 900px) {
+  .app-toast {
+    top: auto;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 12px);
+  }
+
+  .app-toast.show {
+    transform: translate(-50%, 0);
+  }
+}
+
+.modal-confirm {
+  max-width: 440px;
+}
+
+.confirm-msg {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.confirm-icon {
+  font-size: 26px;
+  margin-bottom: 6px;
+}
+
+.modal-confirm .modal-foot {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .modal input[type='text'],
 .modal input[type='number'],
 .modal input[type='email'],

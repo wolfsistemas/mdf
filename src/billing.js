@@ -110,13 +110,26 @@ function billingPost(action, payload) {
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, ...payload })
-  }).then(async (res) => {
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json || json.ok === false) {
-      throw new Error((json && (json.error || json.message)) || 'Falha na cobrança.')
-    }
-    return json
   })
+    .then(async (res) => {
+      const text = await res.text().catch(() => '')
+      let json = null
+      try {
+        json = text ? JSON.parse(text) : null
+      } catch (err) {
+        json = null
+      }
+      if (!res.ok || !json || json.ok === false) {
+        const serverMsg = json && (json.error || json.message)
+        const snippet = text ? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : ''
+        throw new Error(serverMsg || snippet || `Falha na cobrança (HTTP ${res.status}).`)
+      }
+      return json
+    })
+    .catch((err) => {
+      if (err instanceof TypeError) throw new Error('Sem conexão com o servidor de cobrança. Tente de novo.')
+      throw err
+    })
 }
 
 export function subscribePlan(userId, plan) {
