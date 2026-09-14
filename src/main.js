@@ -894,8 +894,15 @@ function upgradeModal() {
       const r = kind === 'once' ? await checkoutOnce(authUser.id, plan) : await subscribePlan(authUser.id, plan)
       if (r && r.url) {
         if (!/^https:\/\/[^/]*\.?mercadopago\.com/i.test(r.url)) {
-          throw new Error('O Mercado Pago devolveu um link inesperado. Avise o suporte.')
+          let host = r.url
+          try {
+            host = new URL(r.url).host
+          } catch (e) {
+            /* mantém a url crua */
+          }
+          throw new Error(`O Mercado Pago devolveu um link inesperado (${host}). Avise o suporte.`)
         }
+        console.info('[billing] abrindo checkout', r.url)
         location.href = r.url
         return
       }
