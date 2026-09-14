@@ -22,6 +22,7 @@
  *   MP_PROCESSED            NÃO mexer (dedupe interno)
  */
 
+var BUILD = '2026-09-14b'
 var PLAN_DAYS = 30
 var DEFAULT_LOG_EMAIL = 'wolfsaasbr@gmail.com'
 var PLAN_DEFS = {
@@ -695,7 +696,9 @@ function doGet() {
   return jsonOut({
     ok: true,
     service: 'mdf-atelier-billing',
+    build: BUILD,
     provider: provider(),
+    sandbox: 'off',
     routes: ['subscribe', 'checkout', 'cancel_subscription', 'sync_subscription', 'webhook']
   })
 }
