@@ -1108,55 +1108,118 @@ input[type="color"] {
   color: var(--ok);
 }
 
-.auth-plans {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.auth-plans.one {
-  grid-template-columns: 1fr;
-}
-
-.auth-plans.one .auth-plan {
-  cursor: default;
-}
-
-.auth-plan {
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  padding: 12px;
+.pay-options {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: var(--panel-2);
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-  width: 100%;
+  gap: 8px;
 }
 
-.auth-plan.hot {
+.pay-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.08s ease;
+}
+
+.pay-opt:hover {
+  border-color: var(--muted);
+}
+
+.pay-opt:active {
+  transform: scale(0.995);
+}
+
+.pay-opt.sel {
+  border-color: var(--gold);
+  background: rgba(212, 165, 116, 0.12);
+}
+
+.pay-opt .radio {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  position: relative;
+}
+
+.pay-opt.sel .radio {
   border-color: var(--gold);
 }
 
-.auth-plan strong {
-  font-size: 15px;
+.pay-opt.sel .radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--gold);
 }
 
-.auth-plan span {
-  color: var(--muted);
-  font-size: 12px;
+.pay-opt .info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.pay-title {
-  margin: 12px 0 6px;
+.pay-opt .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
+}
+
+.pay-opt .badge {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  color: #1a140f;
+  background: var(--gold);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.pay-opt .note {
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pay-opt .amt {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.pay-msg {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.pay-benefits {
+  margin: 10px 0 6px;
+}
+
+.pay-extra {
+  margin-top: 2px;
+}
+
+.btn.full {
+  width: 100%;
 }
 
 .auth-box a.btn {

@@ -627,7 +627,7 @@ function guardProjectSlots() {
   return true
 }
 function openUpgrade(message, plan) {
-  modal = { kind: 'upgrade', msg: message || '', pick: 'pro' }
+  modal = { kind: 'upgrade', msg: message || '', pick: plan || '3m' }
   render()
 }
 
@@ -1005,45 +1005,72 @@ function upgradeModal() {
       render()
     }
   }
-  const onceCard = (key) => {
-    const p = ONCE_PLANS[key]
-    if (!p) return null
-    return h('button', { class: 'auth-plan' + (key === '3m' ? ' hot' : ''), onClick: () => runOnce(key) }, [
-      h('strong', {}, [p.label + ' de Pro']),
-      h('span', {}, [p.priceLabel + ' · pagamento único'])
-    ])
-  }
-  const bullets = ['Orçamentos ilimitados', 'Logo da sua marcenaria no documento']
+  const options = [
+    {
+      id: '3m',
+      title: '3 meses de Pro',
+      amt: ONCE_PLANS['3m'].priceLabel,
+      note: 'Pagamento único · equivale a R$ 43/mês',
+      badge: 'Melhor valor'
+    },
+    {
+      id: '1m',
+      title: '1 mês de Pro',
+      amt: ONCE_PLANS['1m'].priceLabel,
+      note: 'Pagamento único'
+    },
+    {
+      id: 'sub',
+      title: 'Mensal',
+      amt: PLANS.pro.priceLabel,
+      note: 'Renova automaticamente · cancele quando quiser'
+    }
+  ]
+  const selected = options.find((o) => o.id === m.pick) || options[0]
+  const runSelected = () => (selected.id === 'sub' ? runSub() : runOnce(selected.id))
+  const optionEl = (o) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'pay-opt' + (selected.id === o.id ? ' sel' : ''),
+        onClick: () => {
+          m.pick = o.id
+          m.payMsg = ''
+          m.payKind = ''
+          render()
+        }
+      },
+      [
+        h('span', { class: 'radio' }),
+        h('span', { class: 'info' }, [
+          h('span', { class: 'title' }, [o.title, o.badge ? h('em', { class: 'badge' }, [o.badge]) : null]),
+          h('span', { class: 'note' }, [o.note])
+        ]),
+        h('span', { class: 'amt' }, [o.amt])
+      ]
+    )
   return h('div', { class: 'modal-backdrop' }, [
     h('div', { class: 'modal auth-modal' }, [
       h('div', { class: 'modal-head' }, [
         h('div', {}, [
           h('h2', {}, ['Assinar o MDF Atelier']),
-          h('span', { class: 'help' }, ['Pague uma vez ou renove todo mês.'])
+          h('span', { class: 'help' }, ['Escolha uma opção e toque em Assinar.'])
         ]),
         h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
       ]),
       h('div', { class: 'modal-body' }, [
         h('div', { class: 'auth-box' }, [
-          h('p', { class: 'help', style: 'line-height:1.5' }, [m.msg || '']),
-          h('p', { class: 'pay-title' }, ['Pagamento único']),
-          h('div', { class: 'auth-plans' }, [onceCard('1m'), onceCard('3m')]),
-          h('p', { class: 'help' }, ['PIX ou cartão à vista. Não renova sozinho.']),
-          h('p', { class: 'pay-title' }, ['Assinatura mensal']),
-          h('button', { class: 'auth-plan', onClick: runSub }, [
-            h('strong', {}, [PLANS.pro.label]),
-            h('span', {}, [PLANS.pro.priceLabel + ' · renova automaticamente'])
+          m.msg ? h('p', { class: 'help pay-msg' }, [m.msg]) : null,
+          h('div', { class: 'pay-options' }, options.map(optionEl)),
+          h('p', { class: 'help pay-benefits' }, [
+            'Orçamentos ilimitados e a logo da sua marcenaria no documento.'
           ]),
-          h('p', { class: 'help' }, ['Cancele quando quiser na aba Conta.']),
-          h(
-            'ul',
-            { class: 'help', style: 'line-height:1.7;padding-left:16px;margin:0' },
-            bullets.map((t) => h('li', {}, [t]))
-          ),
           msgEl,
-          h('div', { class: 'row' }, [
+          h('button', { class: 'btn primary full', onClick: runSelected }, ['Assinar ' + selected.amt]),
+          h('div', { class: 'row pay-extra' }, [
             h('button', { class: 'btn ghost', onClick: runSync }, ['Já paguei — verificar']),
-            h('button', { class: 'btn', onClick: () => { modal = null; render() } }, ['Agora não'])
+            h('button', { class: 'btn ghost', onClick: () => { modal = null; render() } }, ['Agora não'])
           ])
         ])
       ])
