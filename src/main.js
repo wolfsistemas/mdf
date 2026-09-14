@@ -1235,6 +1235,80 @@ function waitFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 }
 
+function inlineSvgStyles(orig, clone) {
+  const props = [
+    'fill',
+    'fill-opacity',
+    'stroke',
+    'stroke-opacity',
+    'stroke-width',
+    'stroke-dasharray',
+    'stroke-linecap',
+    'stroke-linejoin',
+    'opacity',
+    'font-family',
+    'font-size',
+    'font-weight',
+    'letter-spacing',
+    'text-anchor'
+  ]
+  const cs = getComputedStyle(orig)
+  props.forEach((prop) => {
+    const val = cs.getPropertyValue(prop)
+    if (val) clone.style.setProperty(prop, val)
+  })
+  const oc = orig.children
+  const cc = clone.children
+  for (let i = 0; i < oc.length && i < cc.length; i++) inlineSvgStyles(oc[i], cc[i])
+}
+
+/* O html2canvas não rasteriza SVG inline de forma confiável no celular
+ * (desenhos tortos/cortados). Convertemos cada desenho em PNG pelo próprio
+ * navegador antes de capturar. Só afeta o PDF do botão Enviar, não a impressão. */
+function svgToCaptureImage(svg) {
+  const rect = svg.getBoundingClientRect()
+  const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number)
+  const vbW = vb.length === 4 && vb[2] > 0 ? vb[2] : 0
+  const vbH = vb.length === 4 && vb[3] > 0 ? vb[3] : 0
+  const w = Math.max(1, Math.round(rect.width || vbW || 300))
+  const h = Math.max(1, Math.round(rect.height || (vbW ? (w * vbH) / vbW : vbH || 150)))
+  const clone = svg.cloneNode(true)
+  inlineSvgStyles(svg, clone)
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  clone.setAttribute('width', String(w))
+  clone.setAttribute('height', String(h))
+  if (vb.length === 4) clone.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`)
+  const data =
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone))
+  return new Promise((resolve) => {
+    const im = new Image()
+    im.onload = () => {
+      try {
+        const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 2))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.round(w * scale))
+        canvas.height = Math.max(1, Math.round(h * scale))
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(im, 0, 0, canvas.width, canvas.height)
+        const out = document.createElement('img')
+        out.className = svg.getAttribute('class') || ''
+        out.setAttribute('alt', '')
+        out.src = canvas.toDataURL('image/png')
+        out.style.width = '100%'
+        out.style.height = 'auto'
+        svg.replaceWith(out)
+      } catch {
+        /* se falhar, mantém o SVG e deixa o html2canvas tentar */
+      }
+      resolve()
+    }
+    im.onerror = () => resolve()
+    im.src = data
+  })
+}
+
 async function buildQuotePdf() {
   const p = project()
   const filename = quoteFilename(p.name)
@@ -1254,6 +1328,7 @@ async function buildQuotePdf() {
   clone.querySelectorAll('.print-hide').forEach((el) => el.remove())
   host.append(clone)
   document.body.append(host)
+  await Promise.all(Array.from(host.querySelectorAll('svg.schematic-svg')).map(svgToCaptureImage))
   const imgs = Array.from(host.querySelectorAll('img'))
   await Promise.all(
     imgs.map((img) => (img.complete ? Promise.resolve() : new Promise((res) => {
