@@ -780,12 +780,19 @@ function consumePlanReturn() {
 
 function queryParams() {
   const out = {}
+  const dec = (s) => {
+    try {
+      return decodeURIComponent(s)
+    } catch {
+      return s
+    }
+  }
   const add = (qs) => {
     String(qs || '').split(/[&?]/).forEach((pair) => {
       const i = pair.indexOf('=')
       if (i > 0) {
-        const k = decodeURIComponent(pair.slice(0, i))
-        const v = decodeURIComponent(pair.slice(i + 1))
+        const k = dec(pair.slice(0, i))
+        const v = dec(pair.slice(i + 1))
         if (k && v) out[k] = v
       }
     })
@@ -2527,6 +2534,22 @@ async function cancelPlan() {
     openAuth()
     return
   }
+  let recurring = false
+  let checked = false
+  try {
+    const info = await syncSubscription(authUser.id)
+    if (info) {
+      checked = true
+      recurring = !!(info.subscription_id || info.mp_subscription_status === 'authorized')
+      applyPlanPayload(info)
+    }
+  } catch {
+    /* não deu para consultar: segue e tenta cancelar mesmo assim */
+  }
+  if (checked && !recurring) {
+    showToast('Seu Pro é pagamento único (sem renovação). Não há cobrança para cancelar.', 'info', 6000)
+    return
+  }
   const ok = await confirmModal(
     'Cancelar a assinatura Pro? A próxima cobrança não acontece. O período já pago segue até o vencimento.',
     { title: 'Cancelar assinatura', confirmLabel: 'Cancelar assinatura', cancelLabel: 'Manter o Pro', danger: true }
@@ -2547,6 +2570,10 @@ async function cancelPlan() {
     }
     showToast('Não deu para cancelar agora. Tente de novo ou fale com o suporte.', 'err', 5000)
   } catch (err) {
+    if (err && err.code === 'no_subscription') {
+      showToast('Seu Pro é pagamento único (sem renovação). Não há cobrança para cancelar.', 'info', 6000)
+      return
+    }
     showToast((err && err.message) || 'Não deu para cancelar agora.', 'err', 6000)
   } finally {
     overlay.remove()
@@ -2574,8 +2601,8 @@ function tabConta() {
       ]),
       h('p', { class: 'help' }, [
         isLimitedPlan(plan)
-          ? 'Suporte por e-mail. No Pro, cancele a assinatura nesta tela — o mês já pago segue até o vencimento.'
-          : 'Cancelar impede a próxima cobrança. O Pro segue até a data de vencimento; depois a conta volta ao Grátis.'
+          ? 'Suporte por e-mail. No Pro você tem orçamentos ilimitados e a sua logo no documento.'
+          : 'No Pro mensal, cancelar aqui impede a próxima cobrança (o período já pago segue até o vencimento). Se o Pro veio de pagamento único, ele não renova e não há cobrança para cancelar.'
       ])
     ]),
     h('div', { class: 'card' }, [

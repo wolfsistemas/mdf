@@ -148,7 +148,9 @@ async function billingPost(action, payload) {
       if (!res.ok || !json || json.ok === false) {
         const serverMsg = json && (json.error || json.message)
         const snippet = text ? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : ''
-        throw new Error(serverMsg || snippet || `Falha na cobrança (HTTP ${res.status}).`)
+        const err = new Error(serverMsg || snippet || `Falha na cobrança (HTTP ${res.status}).`)
+        if (json && json.code) err.code = json.code
+        throw err
       }
       return json
     })

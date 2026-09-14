@@ -244,7 +244,7 @@ export function termosHTML() {
     `
       <p>O MDF Atelier é um software para marcenarias calcularem orçamentos e planos de corte. Ao usar o app, você concorda com estes termos.</p>
       <h2>Conta e planos</h2>
-      <p>O plano Grátis permite até 3 orçamentos ativos e usa a marca MDF Atelier no documento. O plano Pro (R$ 49/mês) libera orçamentos ilimitados e a logo da sua marcenaria. A cobrança é feita pelo Mercado Pago. O cartão nunca é digitado neste site.</p>
+      <p>O plano Grátis permite até 3 orçamentos ativos e usa a marca MDF Atelier no documento. O plano Pro (R$ 49/mês) libera orçamentos ilimitados e a logo da sua marcenaria. A cobrança é feita por um processador de pagamento seguro, no próprio checkout dele. O cartão nunca é digitado neste site.</p>
       <h2>Cancelamento</h2>
       <p>Você pode cancelar a assinatura a qualquer momento na aba Conta do app. O cancelamento impede a próxima cobrança. O período já pago continua válido até a data de vencimento; depois a conta volta ao Grátis.</p>
       <h2>Uso aceitável</h2>
@@ -263,7 +263,7 @@ export function privacidadeHTML() {
     `
       <p>Tratamos dados para operar o MDF Atelier, nos termos da LGPD (Lei 13.709/2018).</p>
       <h2>O que coletamos</h2>
-      <p>Na conta: e-mail e senha (autenticação). Nos orçamentos: nome do cliente, telefone, notas, móveis, medidas, logo e WhatsApp da marcenaria que você informar. No pagamento: o Mercado Pago processa os dados do cartão; este site não recebe nem armazena número de cartão.</p>
+      <p>Na conta: e-mail e senha (autenticação). Nos orçamentos: nome do cliente, telefone, notas, móveis, medidas, logo e WhatsApp da marcenaria que você informar. No pagamento: o processador de pagamento cuida dos dados do cartão; este site não recebe nem armazena número de cartão.</p>
       <h2>Onde fica</h2>
       <p>Sem login, os dados ficam neste aparelho (navegador). Com login, sincronizamos na sua conta na nuvem (Supabase) para você acessar de outro dispositivo.</p>
       <h2>Para que usamos</h2>

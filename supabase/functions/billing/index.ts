@@ -36,7 +36,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const BUILD = 'fn-2026-09-14b'
+const BUILD = 'fn-2026-09-14c'
 const PLAN_DAYS = 30
 const DEFAULT_LOG_EMAIL = 'wolfsaasbr@gmail.com'
 const PLAN_DEFS: Record<string, { reason: string; centsKey: string; fallbackCents: number }> = {
@@ -493,8 +493,9 @@ async function handleCancel(userId: string) {
   if (!subId) {
     return {
       ok: false,
+      code: 'no_subscription',
       error:
-        'Nenhuma assinatura recorrente ativa no Mercado Pago. Se o Pro veio de um pagamento avulso, não há cobrança para cancelar.'
+        'Seu Pro não tem cobrança recorrente (pagamento único). Não há nada para cancelar.'
     }
   }
   try {
@@ -594,7 +595,8 @@ async function handleInfinityCheckout(userId: string, body: any) {
     /* e-mail é opcional */
   }
   const cents = onceCents(interval)
-  const orderNsu = 'ip-' + userId + '-' + Date.now().toString(36)
+  const orderNsu =
+    'ip-' + userId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
   const payload: any = {
     handle: env('INFINITEPAY_HANDLE'),
     order_nsu: orderNsu,
@@ -650,18 +652,33 @@ async function handleInfinityConfirm(userId: string, body: any) {
   if (!check || check.paid !== true) {
     return { ok: false, status: 'pending', error: 'Pagamento ainda não confirmado. Se já pagou, aguarde alguns segundos.' }
   }
-  await markOrderPaid(order, {
-    slug: body.slug,
-    transaction_nsu: body.transaction_nsu,
-    capture_method: body.capture_method,
-    receipt_url: body.receipt_url
-  })
-  const fresh = await grantDays(userId, Number(order.days) || 30)
-  await notify(
-    'Pagamento avulso confirmado',
-    'user=' + userId + '\norder=' + orderNsu + '\nplano=' + fresh.plan + '\nvalidade=' + fresh.plan_expires_at
-  )
-  return { ok: true, status: 'activated', plan: fresh.plan, plan_expires_at: fresh.plan_expires_at }
+  /* Idempotência compartilhada com o webhook: só concede o Pro uma vez,
+   * mesmo com várias chamadas concorrentes. */
+  const freshEvent = await beginEvent('ip:' + orderNsu)
+  if (!freshEvent) {
+    const p = await loadProfile(userId)
+    if (paidPlan(p)) {
+      return { ok: true, status: 'already', plan: p.plan, plan_expires_at: p.plan_expires_at }
+    }
+    return { ok: false, status: 'pending', error: 'Estamos confirmando o seu pagamento…' }
+  }
+  try {
+    await markOrderPaid(order, {
+      slug: body.slug,
+      transaction_nsu: body.transaction_nsu,
+      capture_method: check.capture_method || body.capture_method,
+      receipt_url: body.receipt_url
+    })
+    const fresh = await grantDays(userId, Number(order.days) || 30)
+    await notify(
+      'Pagamento avulso confirmado',
+      'user=' + userId + '\norder=' + orderNsu + '\nplano=' + fresh.plan + '\nvalidade=' + fresh.plan_expires_at
+    )
+    return { ok: true, status: 'activated', plan: fresh.plan, plan_expires_at: fresh.plan_expires_at }
+  } catch (err) {
+    await dropEvent('ip:' + orderNsu)
+    throw err
+  }
 }
 
 async function handleInfinityWebhook(body: any) {
@@ -678,13 +695,35 @@ async function handleInfinityWebhook(body: any) {
     return { success: false, message: 'Pedido não encontrado' }
   }
   if (order.status === 'paid') return { success: true, message: null }
+  /* O webhook da InfinityPay não tem assinatura: nunca liberamos só pelo
+   * corpo. Confirmamos o pagamento direto na API (server-to-server) antes de
+   * conceder o Pro, para impedir webhook forjado. */
+  let check: any = {}
+  try {
+    check = await ipFetch('/payment_check', 'post', {
+      handle: env('INFINITEPAY_HANDLE'),
+      order_nsu: orderNsu,
+      transaction_nsu: String(body.transaction_nsu || order.transaction_nsu || ''),
+      slug: String(body.invoice_slug || order.slug || '')
+    })
+  } catch (err) {
+    await notify('Webhook avulso: payment_check falhou', String((err && err.message) || err))
+    return { success: false, message: 'Falha ao validar o pagamento' }
+  }
+  if (!check || check.paid !== true) {
+    await notify(
+      'Webhook avulso não confirmado pelo payment_check',
+      JSON.stringify({ order: orderNsu, check }).slice(0, 1200)
+    )
+    return { success: false, message: 'Pagamento não confirmado' }
+  }
   const freshEvent = await beginEvent('ip:' + orderNsu)
   if (!freshEvent) return { success: true, message: null }
   try {
     await markOrderPaid(order, {
       slug: body.invoice_slug,
       transaction_nsu: body.transaction_nsu,
-      capture_method: body.capture_method,
+      capture_method: check.capture_method || body.capture_method,
       receipt_url: body.receipt_url
     })
     const fresh = await grantDays(String(order.user_id), Number(order.days) || 30)
@@ -883,9 +922,16 @@ Deno.serve(async (req) => {
     body = JSON.parse(raw)
   } catch {
     body = {}
+    const dec = (s: string) => {
+      try {
+        return decodeURIComponent(s)
+      } catch {
+        return s
+      }
+    }
     raw.split('&').forEach((pair) => {
       const i = pair.indexOf('=')
-      if (i > 0) body[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(pair.slice(i + 1))
+      if (i > 0) body[dec(pair.slice(0, i))] = dec(pair.slice(i + 1))
     })
   }
 
