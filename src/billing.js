@@ -27,6 +27,12 @@ export const PLANS = {
   }
 }
 
+/* Pagamento avulso (sem recorrência): 1 mês ou 3 meses de Pro. */
+export const ONCE_PLANS = {
+  '1m': { id: '1m', label: '1 mês', priceLabel: 'R$ 49', cents: 4900, days: 30 },
+  '3m': { id: '3m', label: '3 meses', priceLabel: 'R$ 129', cents: 12900, days: 90 }
+}
+
 const DEFAULT_BILLING_URL = 'https://bqwiostqeeahhcoohkcz.supabase.co/functions/v1/billing'
 
 const DEFAULT_ANON_KEY =
@@ -106,6 +112,11 @@ export function billingReturnUrl() {
   return location.origin + path + '?plano=ok#/app'
 }
 
+export function infinityReturnUrl() {
+  const path = location.pathname || '/'
+  return location.origin + path + '?avulso=ok#/app'
+}
+
 async function billingPost(action, payload) {
   if (!BILLING_URL) throw new Error('Cobrança não configurada.')
   let token = null
@@ -160,6 +171,25 @@ export function checkoutOnce(userId, plan) {
     user_id: userId,
     plan,
     redirect_url: billingReturnUrl()
+  })
+}
+
+/* Abre o checkout de pagamento avulso (1 mês / 3 meses). */
+export function checkoutOnceInfinity(userId, interval) {
+  return billingPost('infinity_once', {
+    user_id: userId,
+    interval,
+    redirect_url: infinityReturnUrl()
+  })
+}
+
+/* Confirma no servidor se o pagamento avulso caiu (redundante ao webhook). */
+export function confirmInfinity(userId, params) {
+  return billingPost('infinity_confirm', {
+    user_id: userId,
+    order_nsu: params && params.order_nsu,
+    transaction_nsu: params && params.transaction_nsu,
+    slug: params && params.slug
   })
 }
 

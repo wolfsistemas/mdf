@@ -136,11 +136,22 @@ O front nunca tokeniza cartao. Backend: **Supabase Edge Function**
 (`supabase/functions/billing/index.ts`). O antigo `gas/billing.js` fica
 apenas como referencia e nao e mais usado.
 
+Pagamento avulso (sem recorrencia): **InfinityPay Checkout Integrado**
+(`POST /links`), por PIX ou cartao a vista, em 1 mes (R$ 49) ou 3 meses
+(R$ 129). O front nao guarda credencial: a funcao usa o secret
+`INFINITEPAY_HANDLE` (a InfiniteTag, ex.: `maiconvss`) e devolve o link.
+Cada pedido vira uma linha em `ip_orders`; o webhook da InfinityPay libera os
+dias de Pro. O usuario ve so "pagamento unico" ou "assinatura mensal", sem
+nome de banco.
+
 1. Rode `supabase/billing.sql` no SQL Editor (projeto que ja tem o schema).
-   Ele cria as colunas de plano e a tabela `mp_events` (dedupe de webhook).
+   Ele cria as colunas de plano, a tabela `mp_events` (dedupe do MP) e a
+   tabela `ip_orders` (pedidos avulsos).
 2. Configure os secrets da funcao:
-   `supabase secrets set MP_ACCESS_TOKEN=APP_USR-... PRO_PRICE_CENTS=4900 ULTRA_PRICE_CENTS=8900 --project-ref <ref>`.
+   `supabase secrets set MP_ACCESS_TOKEN=APP_USR-... PRO_PRICE_CENTS=4900 ULTRA_PRICE_CENTS=8900 INFINITEPAY_HANDLE=maiconvss --project-ref <ref>`.
    Opcionais: `MP_WEBHOOK_SECRET` (valida a assinatura do webhook),
+   `INFINITEPAY_API` (default `https://api.checkout.infinitepay.io`),
+   `ONCE_1M_CENTS`/`ONCE_3M_CENTS` (precos do avulso),
    `RESEND_API_KEY`/`EMAIL_FROM`/`EMAIL_LOG` (aviso por e-mail) ou
    `NOTIFY_URL` (relay para um Web App do GAS).
    Para testar: `MP_ACCESS_TOKEN` de teste + duas contas de teste (vendedor
@@ -149,19 +160,23 @@ apenas como referencia e nao e mais usado.
    Checkout Pro costuma abrir pagina quebrada. `MP_USE_SANDBOX` nao existe
    mais.
 3. Publique a funcao: `supabase functions deploy billing --no-verify-jwt
-   --project-ref <ref>` (`--no-verify-jwt` porque o webhook do MP nao manda
+   --project-ref <ref>` (`--no-verify-jwt` porque os webhooks nao mandam
    JWT; as acoes de usuario sao validadas dentro da funcao pelo JWT).
-4. Painel MP → Webhooks na URL
-   `https://<ref>.supabase.co/functions/v1/billing`: eventos de Planos e
-   assinaturas + `payment`.
+4. Webhooks:
+   - Mercado Pago (painel MP) na URL
+     `https://<ref>.supabase.co/functions/v1/billing`: eventos de Planos e
+     assinaturas + `payment`.
+   - InfinityPay: na criacao do link a propria funcao manda
+     `webhook_url = <funcao>?infinity=1`. Nao ha assinatura; a funcao confere
+     o `order_nsu` em `ip_orders` antes de liberar.
 5. A URL da funcao ja vai no app (`src/billing.js`) e no `.env.example`
    (`VITE_BILLING_URL`). So mude se o project ref mudar.
 6. Pages: secrets `SUPABASE_URL` e `SUPABASE_ANON_KEY`. `BILLING_URL` e
    opcional (ha fallback no codigo).
 
-As acoes `subscribe`, `checkout`, `cancel_subscription` e
-`sync_subscription` exigem o JWT do Supabase e so mexem no proprio
-`user_id`; o webhook nao usa JWT (envia `notification_url`).
+As acoes `subscribe`, `checkout`, `infinity_once`, `infinity_confirm`,
+`cancel_subscription` e `sync_subscription` exigem o JWT do Supabase e so
+mexem no proprio `user_id`; os webhooks nao usam JWT.
 
 ### Alterar o preco do plano
 
@@ -181,9 +196,15 @@ Antes de vender, volte para `PRO_PRICE_CENTS=4900`. Um plano do Mercado
 Pago com preco antigo nao e reaproveitado: ao mudar o valor, a proxima
 assinatura cria um plano novo automaticamente.
 
+Precos do avulso: `ONCE_1M_CENTS` (default `4900`) e `ONCE_3M_CENTS`
+(default `12900`). Mudar o valor exige redeploy da funcao. Os dias liberados
+(30 e 90) ficam em `ONCE_DEFS` no codigo da funcao.
+
 Volta do checkout: `?plano=ok#/app` chama `sync_subscription` (ate 4
-tentativas). O webhook do MP pode falhar na 1a vez; o sync e a rede de
-seguranca. Cancelar nao corta o mes ja pago.
+tentativas). O avulso volta com `?avulso=ok` + `order_nsu`/`slug`/
+`transaction_nsu` (o app chama `infinity_confirm`). O webhook do MP pode
+falhar na 1a vez; o sync e a rede de seguranca. Cancelar nao corta o mes ja
+pago; no avulso nao ha o que cancelar.
 
 Para o build do GitHub Pages incluir a nuvem, adicione os repositorios secrets
 `SUPABASE_URL` e `SUPABASE_ANON_KEY` (Settings -> Secrets and variables) — sem

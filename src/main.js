@@ -45,12 +45,14 @@ import { landingHTML, termosHTML, privacidadeHTML } from './landing.js'
 import {
   FREE_PROJECT_LIMIT,
   PLANS,
+  ONCE_PLANS,
   planLabel,
   isLimitedPlan,
   effectivePlan,
   billingConfigured,
   subscribePlan,
-  checkoutOnce,
+  checkoutOnceInfinity,
+  confirmInfinity,
   syncSubscription,
   cancelSubscription,
   supportHref,
@@ -776,6 +778,65 @@ function consumePlanReturn() {
   run()
 }
 
+function queryParams() {
+  const out = {}
+  const add = (qs) => {
+    String(qs || '').split(/[&?]/).forEach((pair) => {
+      const i = pair.indexOf('=')
+      if (i > 0) {
+        const k = decodeURIComponent(pair.slice(0, i))
+        const v = decodeURIComponent(pair.slice(i + 1))
+        if (k && v) out[k] = v
+      }
+    })
+  }
+  add((location.search || '').replace(/^\?/, ''))
+  const hash = (location.hash || '').replace(/^#/, '')
+  if (hash.indexOf('?') >= 0) add(hash.slice(hash.indexOf('?') + 1))
+  if (hash.indexOf('&') >= 0) add(hash.slice(hash.indexOf('&') + 1))
+  return out
+}
+
+function infinityOrderFromUrl() {
+  const q = queryParams()
+  if (!q.order_nsu) return null
+  return {
+    order_nsu: q.order_nsu,
+    transaction_nsu: q.transaction_nsu,
+    slug: q.slug,
+    capture_method: q.capture_method
+  }
+}
+
+function consumeInfinityReturn() {
+  const order = infinityOrderFromUrl()
+  if (!order) return
+  if (!authUser) {
+    if (cloudConfigured()) return
+    history.replaceState(null, '', (location.pathname || '/') + '#/app')
+    openAuth()
+    return
+  }
+  history.replaceState(null, '', (location.pathname || '/') + '#/app')
+  if (!billingConfigured()) return
+  let tries = 0
+  const run = () => {
+    tries += 1
+    confirmInfinity(authUser.id, order)
+      .then((r) => {
+        if (applyPlanPayload(r)) {
+          showToast('Pagamento confirmado. Pro liberado!', 'ok')
+          return
+        }
+        if (tries < 6) setTimeout(run, 3000)
+      })
+      .catch(() => {
+        if (tries < 6) setTimeout(run, 3000)
+      })
+  }
+  run()
+}
+
 function consumeUpgradeIntent() {
   const m = (location.hash || '').match(/[?&]upgrade=(pro|ultra)(?:&|$)/)
   if (!m) return
@@ -859,51 +920,42 @@ function authModal() {
 
 function upgradeModal() {
   const m = modal
-  const chosen = PLANS.pro
-  const msgEl = h('div', { class: 'auth-msg' }, [m.payMsg || ''])
-  if (m.payKind) msgEl.className = 'auth-msg ' + m.payKind
-  const runPay = async (kind) => {
-    const plan = 'pro'
-    if (!authUser) {
-      modal = { kind: 'auth' }
-      render()
-      return
+  const msgEl = h('div', { class: 'auth-msg' + (m.payKind ? ' ' + m.payKind : '') }, [m.payMsg || ''])
+  const go = (url, test) => {
+    if (!test.test(url)) {
+      let host = url
+      try {
+        host = new URL(url).host
+      } catch (e) {
+        /* mantém a url crua */
+      }
+      throw new Error(`O pagamento devolveu um link inesperado (${host}). Avise o suporte.`)
     }
-    if (!billingConfigured()) {
-      m.payMsg = 'Cobrança ainda não está no ar neste site (falta BILLING_URL no build).'
-      m.payKind = 'err'
-      render()
-      return
-    }
-    m.payMsg = kind === 'sync' ? 'Verificando pagamento…' : 'Abrindo o Mercado Pago…'
+    console.info('[billing] abrindo checkout', url)
+    location.href = url
+  }
+  const needAuth = () => {
+    if (authUser) return true
+    modal = { kind: 'auth' }
+    render()
+    return false
+  }
+  const needBilling = () => {
+    if (billingConfigured()) return true
+    m.payMsg = 'Cobrança ainda não está no ar neste site.'
+    m.payKind = 'err'
+    render()
+    return false
+  }
+  const runOnce = async (interval) => {
+    if (!needAuth() || !needBilling()) return
+    m.payMsg = 'Abrindo o pagamento…'
     m.payKind = ''
     render()
     try {
-      if (kind === 'sync') {
-        const r = await syncSubscription(authUser.id)
-        if (applyPlanPayload(r) && !isLimitedPlan(currentPlan())) {
-          modal = null
-          render()
-          return
-        }
-        m.payMsg = 'Ainda não consta. Se você já pagou, aguarde um minuto e tente de novo.'
-        m.payKind = 'err'
-        render()
-        return
-      }
-      const r = kind === 'once' ? await checkoutOnce(authUser.id, plan) : await subscribePlan(authUser.id, plan)
+      const r = await checkoutOnceInfinity(authUser.id, interval)
       if (r && r.url) {
-        if (!/^https:\/\/[^/]*\.?mercadopago\.com/i.test(r.url)) {
-          let host = r.url
-          try {
-            host = new URL(r.url).host
-          } catch (e) {
-            /* mantém a url crua */
-          }
-          throw new Error(`O Mercado Pago devolveu um link inesperado (${host}). Avise o suporte.`)
-        }
-        console.info('[billing] abrindo checkout', r.url)
-        location.href = r.url
+        go(r.url, /^https:\/\/[^/]*infinitepay\.io/i)
         return
       }
       throw new Error('Sem link de pagamento.')
@@ -913,27 +965,76 @@ function upgradeModal() {
       render()
     }
   }
-  const mp = billingConfigured()
+  const runSub = async () => {
+    if (!needAuth() || !needBilling()) return
+    m.payMsg = 'Abrindo a assinatura…'
+    m.payKind = ''
+    render()
+    try {
+      const r = await subscribePlan(authUser.id, 'pro')
+      if (r && r.url) {
+        go(r.url, /^https:\/\/[^/]*\.?mercadopago\.com/i)
+        return
+      }
+      throw new Error('Sem link de assinatura.')
+    } catch (err) {
+      m.payMsg = (err && err.message) || 'Não deu para abrir a assinatura.'
+      m.payKind = 'err'
+      render()
+    }
+  }
+  const runSync = async () => {
+    if (!needAuth() || !needBilling()) return
+    m.payMsg = 'Verificando pagamento…'
+    m.payKind = ''
+    render()
+    try {
+      const r = await syncSubscription(authUser.id)
+      if (applyPlanPayload(r) && !isLimitedPlan(currentPlan())) {
+        modal = null
+        render()
+        showToast('Pagamento confirmado. Pro liberado!', 'ok')
+        return
+      }
+      m.payMsg = 'Ainda não consta. Se você já pagou, aguarde um minuto e tente de novo.'
+      m.payKind = 'err'
+      render()
+    } catch (err) {
+      m.payMsg = (err && err.message) || 'Não deu para verificar agora.'
+      m.payKind = 'err'
+      render()
+    }
+  }
+  const onceCard = (key) => {
+    const p = ONCE_PLANS[key]
+    if (!p) return null
+    return h('button', { class: 'auth-plan' + (key === '3m' ? ' hot' : ''), onClick: () => runOnce(key) }, [
+      h('strong', {}, [p.label + ' de Pro']),
+      h('span', {}, [p.priceLabel + ' · pagamento único'])
+    ])
+  }
   const bullets = ['Orçamentos ilimitados', 'Logo da sua marcenaria no documento']
   return h('div', { class: 'modal-backdrop' }, [
     h('div', { class: 'modal auth-modal' }, [
       h('div', { class: 'modal-head' }, [
         h('div', {}, [
           h('h2', {}, ['Assinar o MDF Atelier']),
-          h('span', { class: 'help' }, ['O pagamento abre no Mercado Pago.'])
+          h('span', { class: 'help' }, ['Pague uma vez ou renove todo mês.'])
         ]),
         h('button', { class: 'btn small ghost x', onClick: () => { modal = null; render() } }, ['✕'])
       ]),
       h('div', { class: 'modal-body' }, [
         h('div', { class: 'auth-box' }, [
           h('p', { class: 'help', style: 'line-height:1.5' }, [m.msg || '']),
-          h('div', { class: 'auth-plans one' }, [
-            h(
-              'div',
-              { class: 'auth-plan hot' },
-              [h('strong', {}, [PLANS.pro.label]), h('span', {}, [PLANS.pro.priceLabel])]
-            )
+          h('p', { class: 'pay-title' }, ['Pagamento único']),
+          h('div', { class: 'auth-plans' }, [onceCard('1m'), onceCard('3m')]),
+          h('p', { class: 'help' }, ['PIX ou cartão à vista. Não renova sozinho.']),
+          h('p', { class: 'pay-title' }, ['Assinatura mensal']),
+          h('button', { class: 'auth-plan', onClick: runSub }, [
+            h('strong', {}, [PLANS.pro.label]),
+            h('span', {}, [PLANS.pro.priceLabel + ' · renova automaticamente'])
           ]),
+          h('p', { class: 'help' }, ['Cancele quando quiser na aba Conta.']),
           h(
             'ul',
             { class: 'help', style: 'line-height:1.7;padding-left:16px;margin:0' },
@@ -941,15 +1042,9 @@ function upgradeModal() {
           ),
           msgEl,
           h('div', { class: 'row' }, [
-            h('button', { class: 'btn primary', onClick: () => runPay('sub') }, [mp ? 'Assinar ' + chosen.label : 'Assinar (aguardando cobrança)']),
+            h('button', { class: 'btn ghost', onClick: runSync }, ['Já paguei — verificar']),
             h('button', { class: 'btn', onClick: () => { modal = null; render() } }, ['Agora não'])
-          ]),
-          mp
-            ? h('div', { class: 'row' }, [
-                h('button', { class: 'btn ghost', onClick: () => runPay('once') }, ['Pagar 30 dias (avulso)']),
-                h('button', { class: 'btn ghost', onClick: () => runPay('sync') }, ['Já assinei — verificar'])
-              ])
-            : h('p', { class: 'help' }, ['No GitHub Pages a cobrança só abre depois do secret BILLING_URL no workflow.'])
+          ])
         ])
       ])
     ])
@@ -2854,6 +2949,7 @@ function showScreen() {
     if (desired === 'app') {
       consumeUpgradeIntent()
       consumePlanReturn()
+      consumeInfinityReturn()
     } else if (desired === 'landing') {
       scrollLanding()
     }
@@ -2876,18 +2972,23 @@ function showScreen() {
         setAuthListener((u) => {
           authUser = u
           if (u) {
-            syncAfterLogin().then(() => consumePlanReturn())
+            syncAfterLogin().then(() => {
+              consumePlanReturn()
+              consumeInfinityReturn()
+            })
           } else render()
         })
         cloudInit()
       } else {
         consumePlanReturn()
+        consumeInfinityReturn()
       }
     } else {
       recalc()
       render()
       consumeUpgradeIntent()
       consumePlanReturn()
+      consumeInfinityReturn()
     }
   } else {
     document.body.classList.add('landing-mode')

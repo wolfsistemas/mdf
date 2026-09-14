@@ -17,6 +17,10 @@
  *   ULTRA_PRICE_CENTS    8900
  *   PAYMENT_PROVIDER     mp (opcional)
  *   MP_WEBHOOK_SECRET    (opcional; liga a validação da assinatura)
+ *   INFINITEPAY_HANDLE   InfiniteTag da conta (ex.: maiconvss) — pagamento avulso
+ *   INFINITEPAY_API      (opcional) default https://api.checkout.infinitepay.io
+ *   ONCE_1M_CENTS        (opcional) default 4900
+ *   ONCE_3M_CENTS        (opcional) default 12900
  *   RESEND_API_KEY       (opcional; e-mail de log via Resend)
  *   EMAIL_FROM           (opcional) remetente Resend
  *   EMAIL_LOG            (opcional) destino dos avisos
@@ -32,12 +36,17 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const BUILD = 'fn-2026-09-14a'
+const BUILD = 'fn-2026-09-14b'
 const PLAN_DAYS = 30
 const DEFAULT_LOG_EMAIL = 'wolfsaasbr@gmail.com'
 const PLAN_DEFS: Record<string, { reason: string; centsKey: string; fallbackCents: number }> = {
   pro: { reason: 'MDF Atelier Pro', centsKey: 'PRO_PRICE_CENTS', fallbackCents: 4900 },
   ultra: { reason: 'MDF Atelier Ultra', centsKey: 'ULTRA_PRICE_CENTS', fallbackCents: 8900 }
+}
+/* Pagamento avulso (InfinityPay): valor fixo em centavos + dias de Pro. */
+const ONCE_DEFS: Record<string, { label: string; days: number; centsKey: string; fallbackCents: number }> = {
+  '1m': { label: 'MDF Atelier Pro — 30 dias', days: 30, centsKey: 'ONCE_1M_CENTS', fallbackCents: 4900 },
+  '3m': { label: 'MDF Atelier Pro — 90 dias', days: 90, centsKey: 'ONCE_3M_CENTS', fallbackCents: 12900 }
 }
 const MP_SUB_TOPICS = [
   'preapproval',
@@ -51,6 +60,10 @@ const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '')
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
 const SELF_URL = SUPABASE_URL + '/functions/v1/billing'
+
+function ipBase() {
+  return (Deno.env.get('INFINITEPAY_API') || 'https://api.checkout.infinitepay.io').replace(/\/$/, '')
+}
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes no ambiente')
@@ -111,6 +124,14 @@ function planAmount(plan: string) {
   let cents = Number(env(def.centsKey) || def.fallbackCents)
   if (!(cents > 0)) cents = def.fallbackCents
   return cents / 100
+}
+
+function onceCents(interval: string) {
+  const def = ONCE_DEFS[interval]
+  if (!def) return 0
+  let cents = Number(env(def.centsKey) || def.fallbackCents)
+  if (!(cents > 0)) cents = def.fallbackCents
+  return Math.round(cents)
 }
 
 function mpCheckoutUrl(obj: any) {
@@ -197,6 +218,30 @@ function isNotFound(err: any) {
   return err?.status === 404 || /404/.test(msg) || /not found/i.test(msg)
 }
 
+/* ============================== InfinityPay ============================== */
+
+async function ipFetch(path: string, method: string, payload?: unknown) {
+  const res = await fetch(ipBase() + path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: payload == null ? undefined : JSON.stringify(payload)
+  })
+  const text = await res.text()
+  let parsed: any = {}
+  try {
+    parsed = text ? JSON.parse(text) : {}
+  } catch {
+    parsed = {}
+  }
+  if (res.status < 200 || res.status >= 300) {
+    const err: any = new Error(text.slice(0, 400) || `InfinityPay HTTP ${res.status}`)
+    err.status = res.status
+    err.json = parsed
+    throw err
+  }
+  return parsed
+}
+
 /* ============================== perfis ============================== */
 
 async function loadProfile(userId: string) {
@@ -258,6 +303,26 @@ async function activatePlan(userId: string, plan: string) {
   const fresh = await loadProfile(userId)
   if (!fresh || (fresh.plan !== 'pro' && fresh.plan !== 'ultra')) {
     await notify('ATENÇÃO: plano não confirmado', 'user=' + userId + '\nrow=' + JSON.stringify(fresh))
+    throw new Error('Plano não confirmado')
+  }
+  return fresh
+}
+
+/**
+ * Libera `days` de Pro somando ao saldo atual (não descarta tempo já pago).
+ * Usado no pagamento avulso: 1 mês = 30 dias, 3 meses = 90 dias.
+ */
+async function grantDays(userId: string, days: number) {
+  const row = await loadProfile(userId)
+  if (!row) throw new Error('Perfil não encontrado')
+  const current = row.plan_expires_at ? new Date(row.plan_expires_at).getTime() : 0
+  const base = Number.isFinite(current) && current > Date.now() ? current : Date.now()
+  const expires = new Date(base + days * 86400000).toISOString()
+  const plan = row.plan === 'ultra' ? 'ultra' : 'pro'
+  await patchProfile(userId, { plan, plan_expires_at: expires })
+  const fresh = await loadProfile(userId)
+  if (!fresh || (fresh.plan !== 'pro' && fresh.plan !== 'ultra')) {
+    await notify('ATENÇÃO: plano avulso não confirmado', 'user=' + userId + '\nrow=' + JSON.stringify(fresh))
     throw new Error('Plano não confirmado')
   }
   return fresh
@@ -494,6 +559,152 @@ async function handleSync(userId: string) {
   }
 }
 
+/* ============================== avulso (InfinityPay) ============================== */
+
+async function findByOrderNsu(orderNsu: string) {
+  const { data, error } = await sb.from('ip_orders').select('*').eq('order_nsu', orderNsu).maybeSingle()
+  if (error) throw new Error('GET ip_orders falhou: ' + error.message)
+  return data
+}
+
+async function markOrderPaid(order: any, info: any) {
+  const patch: Record<string, unknown> = { status: 'paid', paid_at: new Date().toISOString() }
+  if (info && info.slug) patch.slug = String(info.slug).slice(0, 120)
+  if (info && info.transaction_nsu) patch.transaction_nsu = String(info.transaction_nsu).slice(0, 120)
+  if (info && info.capture_method) patch.capture_method = String(info.capture_method).slice(0, 30)
+  if (info && info.receipt_url) patch.receipt_url = String(info.receipt_url).slice(0, 500)
+  await sb.from('ip_orders').update(patch).eq('order_nsu', order.order_nsu)
+}
+
+async function handleInfinityCheckout(userId: string, body: any) {
+  if (!env('INFINITEPAY_HANDLE')) return { ok: false, error: 'Pagamento avulso indisponível no servidor.' }
+  if (!uuidOk(userId)) return { ok: false, error: 'user_id inválido' }
+  const interval = String(body.interval || '1m')
+  const def = ONCE_DEFS[interval]
+  if (!def) return { ok: false, error: 'opção de pagamento inválida' }
+  const redirect = String(body.redirect_url || '')
+  if (!redirect) return { ok: false, error: 'redirect_url ausente' }
+  const row = await loadProfile(userId)
+  if (!row) return { ok: false, error: 'Perfil não encontrado. Entre no app uma vez antes de pagar.' }
+  let email = ''
+  try {
+    const { data } = await sb.auth.admin.getUserById(userId)
+    email = String((data && data.user && data.user.email) || '')
+  } catch {
+    /* e-mail é opcional */
+  }
+  const cents = onceCents(interval)
+  const orderNsu = 'ip-' + userId + '-' + Date.now().toString(36)
+  const payload: any = {
+    handle: env('INFINITEPAY_HANDLE'),
+    order_nsu: orderNsu,
+    redirect_url: redirect,
+    webhook_url: SELF_URL + '?infinity=1',
+    items: [{ quantity: 1, price: cents, description: def.label }]
+  }
+  if (email) payload.customer = { email }
+  let data: any
+  try {
+    data = await ipFetch('/links', 'post', payload)
+  } catch (err: any) {
+    await notify('Falha ao gerar link avulso (user ' + userId + ')', String((err && err.message) || err))
+    return { ok: false, error: 'Não deu para abrir o pagamento agora. Tente de novo.' }
+  }
+  if (!data || !data.url) return { ok: false, error: 'O pagamento não devolveu o link.' }
+  const { error } = await sb.from('ip_orders').insert({
+    order_nsu: orderNsu,
+    user_id: userId,
+    interval,
+    days: def.days,
+    amount_cents: cents
+  })
+  if (error) {
+    await notify('Falha ao gravar pedido avulso (user ' + userId + ')', error.message)
+    return { ok: false, error: 'Não deu para registrar o pedido. Tente de novo.' }
+  }
+  return { ok: true, url: String(data.url), order_nsu: orderNsu, interval, days: def.days }
+}
+
+async function handleInfinityConfirm(userId: string, body: any) {
+  if (!env('INFINITEPAY_HANDLE')) return { ok: false, error: 'Pagamento avulso indisponível no servidor.' }
+  if (!uuidOk(userId)) return { ok: false, error: 'user_id inválido' }
+  const orderNsu = String(body.order_nsu || '')
+  if (!orderNsu) return { ok: false, error: 'order_nsu ausente' }
+  const order = await findByOrderNsu(orderNsu)
+  if (!order || String(order.user_id) !== userId) return { ok: false, error: 'Pedido não encontrado' }
+  if (order.status === 'paid') {
+    const p = await loadProfile(userId)
+    return { ok: true, status: 'already', plan: p && p.plan, plan_expires_at: p && p.plan_expires_at }
+  }
+  let check: any = {}
+  try {
+    check = await ipFetch('/payment_check', 'post', {
+      handle: env('INFINITEPAY_HANDLE'),
+      order_nsu: orderNsu,
+      transaction_nsu: String(body.transaction_nsu || order.transaction_nsu || ''),
+      slug: String(body.slug || order.slug || '')
+    })
+  } catch {
+    return { ok: false, status: 'pending', error: 'Pagamento ainda não confirmado.' }
+  }
+  if (!check || check.paid !== true) {
+    return { ok: false, status: 'pending', error: 'Pagamento ainda não confirmado. Se já pagou, aguarde alguns segundos.' }
+  }
+  await markOrderPaid(order, {
+    slug: body.slug,
+    transaction_nsu: body.transaction_nsu,
+    capture_method: body.capture_method,
+    receipt_url: body.receipt_url
+  })
+  const fresh = await grantDays(userId, Number(order.days) || 30)
+  await notify(
+    'Pagamento avulso confirmado',
+    'user=' + userId + '\norder=' + orderNsu + '\nplano=' + fresh.plan + '\nvalidade=' + fresh.plan_expires_at
+  )
+  return { ok: true, status: 'activated', plan: fresh.plan, plan_expires_at: fresh.plan_expires_at }
+}
+
+async function handleInfinityWebhook(body: any) {
+  const orderNsu = String(body.order_nsu || '')
+  if (!orderNsu) return { success: false, message: 'order_nsu ausente' }
+  let order: any = null
+  try {
+    order = await findByOrderNsu(orderNsu)
+  } catch (err) {
+    console.warn('ip_orders lookup falhou:', String(err))
+  }
+  if (!order) {
+    await notify('Webhook avulso sem pedido', JSON.stringify(body).slice(0, 1500))
+    return { success: false, message: 'Pedido não encontrado' }
+  }
+  if (order.status === 'paid') return { success: true, message: null }
+  const freshEvent = await beginEvent('ip:' + orderNsu)
+  if (!freshEvent) return { success: true, message: null }
+  try {
+    await markOrderPaid(order, {
+      slug: body.invoice_slug,
+      transaction_nsu: body.transaction_nsu,
+      capture_method: body.capture_method,
+      receipt_url: body.receipt_url
+    })
+    const fresh = await grantDays(String(order.user_id), Number(order.days) || 30)
+    await notify(
+      'Pagamento avulso aprovado (webhook)',
+      'user=' + order.user_id + '\norder=' + orderNsu + '\nplano=' + fresh.plan + '\nvalidade=' + fresh.plan_expires_at
+    )
+    return { success: true, message: null }
+  } catch (err) {
+    await dropEvent('ip:' + orderNsu)
+    throw err
+  }
+}
+
+function isInfinityWebhook(req: Request, body: any) {
+  const url = new URL(req.url)
+  if (url.searchParams.get('infinity')) return true
+  return !!(body && body.order_nsu && (body.invoice_slug || body.capture_method || body.paid_amount != null))
+}
+
 /* ============================== webhooks ============================== */
 
 async function handleMpApprovedPayment(eventId: string, payment: any) {
@@ -642,7 +853,14 @@ async function userFromJwt(req: Request, body: any): Promise<string> {
   }
 }
 
-const USER_ACTIONS = ['subscribe', 'checkout', 'cancel_subscription', 'sync_subscription']
+const USER_ACTIONS = [
+  'subscribe',
+  'checkout',
+  'infinity_once',
+  'infinity_confirm',
+  'cancel_subscription',
+  'sync_subscription'
+]
 
 /* ============================== handler ============================== */
 
@@ -687,8 +905,16 @@ Deno.serve(async (req) => {
       if (!userId) return json({ ok: false, error: 'Sessão expirada. Entre de novo no app.' }, 401)
       if (action === 'subscribe') result = await handleSubscribe(userId, body)
       else if (action === 'checkout') result = await handleCheckout(userId, body)
+      else if (action === 'infinity_once') result = await handleInfinityCheckout(userId, body)
+      else if (action === 'infinity_confirm') result = await handleInfinityConfirm(userId, body)
       else if (action === 'cancel_subscription') result = await handleCancel(userId)
       else result = await handleSync(userId)
+    } else if (isInfinityWebhook(req, body)) {
+      log.action = 'webhook_infinity'
+      const ipResult = await handleInfinityWebhook(body)
+      log.result = ipResult
+      console.log(JSON.stringify(log))
+      return json(ipResult, ipResult && ipResult.success ? 200 : 400)
     } else if (isMpWebhook(req, body)) {
       log.action = 'webhook_mp'
       if (!(await signatureOk(req))) return json({ ok: false, error: 'assinatura inválida' }, 401)

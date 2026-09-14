@@ -50,3 +50,29 @@ drop trigger if exists profiles_protect_billing on public.profiles;
 create trigger profiles_protect_billing
   before update on public.profiles
   for each row execute function public.protect_billing_columns();
+
+-- ============================================================================
+-- Pagamento avulso (InfinityPay Checkout Integrado)
+-- ============================================================================
+-- Cada link de pagamento avulso vira uma linha aqui. O webhook / confirmacao
+-- da InfinityPay casa pelo order_nsu e libera os dias de Pro. Sem policies:
+-- o cliente nao enxerga nem forja; so o service_role (Edge Function) escreve.
+create table if not exists public.ip_orders (
+  order_nsu      text primary key,
+  user_id        uuid not null,
+  interval       text not null,
+  days           integer not null,
+  amount_cents   integer not null,
+  status         text not null default 'pending',
+  slug           text,
+  transaction_nsu text,
+  capture_method text,
+  receipt_url    text,
+  created_at     timestamptz not null default now(),
+  paid_at        timestamptz
+);
+
+alter table public.ip_orders enable row level security;
+
+create index if not exists ip_orders_user_idx
+  on public.ip_orders (user_id, created_at desc);

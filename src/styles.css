@@ -1150,6 +1150,15 @@ input[type="color"] {
   font-size: 12px;
 }
 
+.pay-title {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
 .auth-box a.btn {
   text-decoration: none;
   cursor: pointer;

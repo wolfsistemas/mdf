@@ -158,7 +158,7 @@ export function landingHTML() {
           <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
         </div>
       </div>
-      <p class="lpricing-note">Pagamento recorrente no Mercado Pago. Cancele quando quiser na aba Conta; o período já pago segue até o vencimento. O plano Grátis não precisa de cartão.</p>
+      <p class="lpricing-note">Assinatura mensal com renovação automática ou pagamento único de 1 mês (R$ 49) ou 3 meses (R$ 129), por PIX ou cartão à vista. A assinatura pode ser cancelada quando quiser na aba Conta; o período já pago segue até o vencimento. O plano Grátis não precisa de cartão.</p>
     </div>
   </section>
 
@@ -183,7 +183,7 @@ export function landingHTML() {
       </details>
       <details>
         <summary>Como cancelo a assinatura?</summary>
-        <p>Na aba Conta, toque em Cancelar assinatura. A próxima cobrança não acontece. O Pro segue até a data de vencimento; depois a conta volta ao Grátis (3 orçamentos e marca MDF Atelier).</p>
+        <p>Na aba Conta, toque em Cancelar assinatura. A próxima cobrança não acontece. O Pro segue até a data de vencimento; depois a conta volta ao Grátis (3 orçamentos e marca MDF Atelier). Se você escolheu pagamento único, não há cobrança para cancelar: o Pro vale até o fim do período pago.</p>
       </details>
       <details>
         <summary>O que acontece com meus dados se eu cancelar?</summary>
