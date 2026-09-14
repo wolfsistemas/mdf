@@ -132,27 +132,36 @@ no documento. O plano efetivo vem das colunas `profiles.plan` e
 O Ultra esta oculto na oferta ate ter feature propria (equipe compartilhada).
 
 Assinatura: Mercado Pago hospedado (`preapproval_plan` + `init_point`).
-O front nunca tokeniza cartao. Codigo do GAS em `gas/billing.js`.
+O front nunca tokeniza cartao. Backend: **Supabase Edge Function**
+(`supabase/functions/billing/index.ts`). O antigo `gas/billing.js` fica
+apenas como referencia e nao e mais usado.
 
 1. Rode `supabase/billing.sql` no SQL Editor (projeto que ja tem o schema).
-2. Cole `gas/billing.js` no Apps Script (substitua o arquivo inteiro),
-   publique Web app (Execute as: Me, Anyone) e use **Nova versao no mesmo
-   deployment**. Sem esta cola, Assinar nao abre o Mercado Pago.
-3. Script Properties: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`,
-   `PAYMENT_PROVIDER=mp`, `MP_ACCESS_TOKEN`, `PRO_PRICE_CENTS=4900`,
-   `ULTRA_PRICE_CENTS=8900`.
+   Ele cria as colunas de plano e a tabela `mp_events` (dedupe de webhook).
+2. Configure os secrets da funcao:
+   `supabase secrets set MP_ACCESS_TOKEN=APP_USR-... PRO_PRICE_CENTS=4900 ULTRA_PRICE_CENTS=8900 --project-ref <ref>`.
+   Opcionais: `MP_WEBHOOK_SECRET` (valida a assinatura do webhook),
+   `RESEND_API_KEY`/`EMAIL_FROM`/`EMAIL_LOG` (aviso por e-mail) ou
+   `NOTIFY_URL` (relay para um Web App do GAS).
    Para testar: `MP_ACCESS_TOKEN` de teste + duas contas de teste (vendedor
    e comprador). O app sempre abre o `init_point` (checkout de producao,
    aceita usuario de teste). Nao use sandbox: o `sandbox_init_point` do
    Checkout Pro costuma abrir pagina quebrada. `MP_USE_SANDBOX` nao existe
    mais.
-4. Painel MP → Webhooks na URL do GAS: eventos de Planos e assinaturas +
-   `payment` (modo teste e, depois, producao).
-5. A URL `/exec` do GAS ja vai no app (`src/billing.js`) e no
-   `.env.example` (`VITE_BILLING_URL`). So mude se republicar o Web App
-   com URL nova.
+3. Publique a funcao: `supabase functions deploy billing --no-verify-jwt
+   --project-ref <ref>` (`--no-verify-jwt` porque o webhook do MP nao manda
+   JWT; as acoes de usuario sao validadas dentro da funcao pelo JWT).
+4. Painel MP → Webhooks na URL
+   `https://<ref>.supabase.co/functions/v1/billing`: eventos de Planos e
+   assinaturas + `payment`.
+5. A URL da funcao ja vai no app (`src/billing.js`) e no `.env.example`
+   (`VITE_BILLING_URL`). So mude se o project ref mudar.
 6. Pages: secrets `SUPABASE_URL` e `SUPABASE_ANON_KEY`. `BILLING_URL` e
    opcional (ha fallback no codigo).
+
+As acoes `subscribe`, `checkout`, `cancel_subscription` e
+`sync_subscription` exigem o JWT do Supabase e so mexem no proprio
+`user_id`; o webhook nao usa JWT (envia `notification_url`).
 
 Volta do checkout: `?plano=ok#/app` chama `sync_subscription` (ate 4
 tentativas). O webhook do MP pode falhar na 1a vez; o sync e a rede de

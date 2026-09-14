@@ -22,6 +22,16 @@ export function sessionUser() {
   return user
 }
 
+export async function currentAccessToken() {
+  if (!isConfigured()) return null
+  try {
+    const { data } = await client().auth.getSession()
+    return data.session?.access_token || null
+  } catch {
+    return null
+  }
+}
+
 export function setAuthListener(fn) {
   listener = fn
 }

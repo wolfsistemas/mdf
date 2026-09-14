@@ -27,10 +27,13 @@ export const PLANS = {
   }
 }
 
-const DEFAULT_BILLING_URL =
-  'https://script.google.com/macros/s/AKfycbzKfLpnGAnlav80VOlqqa1oFYhaG4nUCGYdsY5TfJ8KAnUmHiJvb-YM3SRo7ROZjMhKHg/exec'
+const DEFAULT_BILLING_URL = 'https://bqwiostqeeahhcoohkcz.supabase.co/functions/v1/billing'
+
+const DEFAULT_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxd2lvc3RxZWVhaGhjb29oa2N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2MDg0NDIsImV4cCI6MjEwNDE4NDQ0Mn0.DDGoEWygqd5c-9Ja6kZtghdRCT9s8axiBG6vUNd6KVc'
 
 const BILLING_URL = String(import.meta.env.VITE_BILLING_URL || DEFAULT_BILLING_URL).trim()
+const ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY).trim()
 
 export function billingConfigured() {
   return Boolean(BILLING_URL)
@@ -103,12 +106,24 @@ export function billingReturnUrl() {
   return location.origin + path + '?plano=ok#/app'
 }
 
-function billingPost(action, payload) {
-  if (!BILLING_URL) return Promise.reject(new Error('Cobrança não configurada.'))
+async function billingPost(action, payload) {
+  if (!BILLING_URL) throw new Error('Cobrança não configurada.')
+  let token = null
+  try {
+    const mod = await import('./cloud.js')
+    token = await mod.currentAccessToken()
+  } catch {
+    token = null
+  }
+  if (!token) throw new Error('Sessão expirada. Entre de novo no app.')
   return fetch(BILLING_URL, {
     method: 'POST',
     redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: ANON_KEY,
+      Authorization: 'Bearer ' + token
+    },
     body: JSON.stringify({ action, ...payload })
   })
     .then(async (res) => {

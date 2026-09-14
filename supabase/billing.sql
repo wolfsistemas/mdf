@@ -23,7 +23,16 @@ create index if not exists profiles_mp_plan_id_idx
 create index if not exists profiles_mp_subscription_id_idx
   on public.profiles (mp_subscription_status, mp_subscription_id);
 
--- O cliente autenticado NÃO pode se promover. Só o service_role (GAS) grava plano.
+-- Dedupe de webhooks do Mercado Pago (Edge Function usa service_role).
+-- Sem policies: anon/authenticated nao enxergam; service_role ignora RLS.
+create table if not exists public.mp_events (
+  id text primary key,
+  created_at timestamptz not null default now()
+);
+
+alter table public.mp_events enable row level security;
+
+-- O cliente autenticado NÃO pode se promover. Só o service_role grava plano.
 create or replace function public.protect_billing_columns()
 returns trigger language plpgsql as $$
 begin
