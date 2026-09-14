@@ -163,6 +163,24 @@ As acoes `subscribe`, `checkout`, `cancel_subscription` e
 `sync_subscription` exigem o JWT do Supabase e so mexem no proprio
 `user_id`; o webhook nao usa JWT (envia `notification_url`).
 
+### Alterar o preco do plano
+
+O valor vem do secret `PRO_PRICE_CENTS` (em centavos: `4900` = R$ 49).
+Para mudar, use uma das opcoes e **redeploye a funcao** (secrets entram em
+vigor no deploy):
+
+- Painel Supabase -> Edge Functions -> Manage secrets -> editar
+  `PRO_PRICE_CENTS` -> Deploy; ou
+- CLI:
+  `supabase secrets set PRO_PRICE_CENTS=4900 --project-ref <ref>`
+  seguido de
+  `supabase functions deploy billing --no-verify-jwt --project-ref <ref>`.
+
+ATENCAO: no momento o Pro esta com **R$ 1 (`100`) apenas para teste**.
+Antes de vender, volte para `PRO_PRICE_CENTS=4900`. Um plano do Mercado
+Pago com preco antigo nao e reaproveitado: ao mudar o valor, a proxima
+assinatura cria um plano novo automaticamente.
+
 Volta do checkout: `?plano=ok#/app` chama `sync_subscription` (ate 4
 tentativas). O webhook do MP pode falhar na 1a vez; o sync e a rede de
 seguranca. Cancelar nao corta o mes ja pago.
