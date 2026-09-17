@@ -115,12 +115,47 @@ function withAccessories(m) {
   }
 }
 
+export const TAMPONAMENTO_OPTIONS = [
+  ['nenhum', 'Nenhum'],
+  ['laterais', 'Laterais expostas'],
+  ['topo-base', 'Topo e base'],
+  ['tudo', 'Laterais, topo e base']
+]
+
+export const TAMPO_TIPO_OPTIONS = [
+  ['total', 'Painel inteiro'],
+  ['sarrafo', 'Sarrafo (faixa)']
+]
+
+function finishingFields(m) {
+  if (m.type === 'mesa') {
+    return [
+      sf('tamponamento', 'Tamponamento do tampo', [
+        ['nenhum', 'Nenhum'],
+        ['dobra', 'Dobrar (engrossar)']
+      ]),
+      nf('tampoT', 'Esp. do reforço mm')
+    ]
+  }
+  if (m.type === 'prateleira') return []
+  return [
+    sf('tamponamento', 'Tamponamento (faces aparentes)', TAMPONAMENTO_OPTIONS),
+    sf('tampoTipo', 'Tamponamento: tipo', TAMPO_TIPO_OPTIONS),
+    nf('tampoT', 'Esp. tamponamento mm'),
+    nf('tampoLarg', 'Largura do sarrafo mm')
+  ]
+}
+
 function withFinishing(m) {
   if (m.type === 'avulso') return m
   return {
     ...m,
-    defaults: { ...m.defaults, fitamento: 'padrao' },
-    fields: [...(m.fields || []), sf('fitamento', 'Fita de borda', FITAMENTO_OPTIONS)]
+    defaults: { ...m.defaults, fitamento: 'padrao', tamponamento: 'nenhum', tampoTipo: 'total', tampoT: 25, tampoLarg: 100 },
+    fields: [
+      ...(m.fields || []),
+      ...finishingFields(m),
+      sf('fitamento', 'Fita de borda', FITAMENTO_OPTIONS)
+    ]
   }
 }
 
@@ -859,9 +894,38 @@ function applyFitamento(pieces, modo) {
   })
 }
 
+const TAMPONAMENTO_TYPES = new Set(['armario', 'guarda-roupa', 'gaveteiro', 'nicho'])
+
+function tamponamentoPieces(item) {
+  const p = item.params || {}
+  const modo = p.tamponamento || 'nenhum'
+  if (modo === 'nenhum') return []
+  const W = mm(num(p, 'width', 800))
+  const H = mm(num(p, 'height', 1800))
+  const D = mm(num(p, 'depth', 500))
+  const t = Math.max(6, mm(num(p, 'tampoT', 25)))
+  const out = []
+  if (item.type === 'mesa') {
+    push(out, part('Reforço do tampo', W, D, t, 1, 'comprimento', tEdge))
+    return out
+  }
+  if (!TAMPONAMENTO_TYPES.has(item.type)) return []
+  const tipo = p.tampoTipo || 'total'
+  const larg = tipo === 'sarrafo' ? Math.max(40, mm(num(p, 'tampoLarg', 100))) : D
+  const lados = modo === 'laterais' || modo === 'tudo' ? 2 : 0
+  if (lados) push(out, part('Tamponamento lateral', H, larg, t, 2, 'comprimento', tEdge))
+  if (modo === 'topo-base' || modo === 'tudo') {
+    const tw = Math.max(0, W - lados * t)
+    push(out, part('Tamponamento tampo', tw, D, t, 1, 'comprimento', tEdge))
+    push(out, part('Tamponamento base', tw, D, t, 1, 'comprimento', tEdge))
+  }
+  return out
+}
+
 export function generateFurniturePieces(item) {
-  const core = appendMdfFeet(generateCorePieces(item), item)
-  return applyFitamento(core, (item.params || {}).fitamento)
+  const core = [...generateCorePieces(item), ...tamponamentoPieces(item)]
+  const coreFeet = appendMdfFeet(core, item)
+  return applyFitamento(coreFeet, (item.params || {}).fitamento)
 }
 
 export function flattenProjectPieces(project) {
@@ -902,6 +966,7 @@ export function furnitureSummaryLine(item) {
     if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
     if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
     if (p.fitamento && p.fitamento !== 'padrao') bits.push(`fita: ${FITAMENTO_LABEL[p.fitamento] || p.fitamento}`)
+    if (p.tamponamento && p.tamponamento !== 'nenhum') bits.push('tampo engrossado')
     return bits.join(' · ')
   }
   const bits = [`${mm(p.width)} × ${mm(p.height || 0)} × ${mm(p.depth)} mm`]
@@ -912,5 +977,6 @@ export function furnitureSummaryLine(item) {
   if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
   if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
   if (p.fitamento && p.fitamento !== 'padrao') bits.push(`fita: ${FITAMENTO_LABEL[p.fitamento] || p.fitamento}`)
+  if (p.tamponamento && p.tamponamento !== 'nenhum') bits.push('tamponado')
   return bits.join(' · ')
 }
