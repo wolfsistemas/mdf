@@ -62,10 +62,30 @@ export const PUXADOR_OPTIONS = [
   ['perfil', 'Perfil / cava']
 ]
 
+export const FITAMENTO_OPTIONS = [
+  ['padrao', 'Padrão do modelo'],
+  ['nenhum', 'Sem fita'],
+  ['frente', 'Só frente'],
+  ['frente-tras', 'Frente e trás'],
+  ['laterais', 'Só laterais'],
+  ['frente-laterais', 'Frente e laterais'],
+  ['perimetro', 'Perímetro (4 lados)']
+]
+
+const FITAMENTO_EDGES = {
+  nenhum: { front: false, back: false, left: false, right: false },
+  frente: { front: true, back: false, left: false, right: false },
+  'frente-tras': { front: true, back: true, left: false, right: false },
+  laterais: { front: false, back: false, left: true, right: true },
+  'frente-laterais': { front: true, back: false, left: true, right: true },
+  perimetro: { front: true, back: true, left: true, right: true }
+}
+
 export const ACCESSORY_KEYS = ['pe', 'peH', 'peQty', 'puxador', 'puxadorQty']
 
 export const PE_LABEL = Object.fromEntries(PE_OPTIONS)
 export const PUXADOR_LABEL = Object.fromEntries(PUXADOR_OPTIONS)
+export const FITAMENTO_LABEL = Object.fromEntries(FITAMENTO_OPTIONS)
 
 const ACCESSORY_DEFAULTS = {
   pe: 'nenhum',
@@ -92,6 +112,15 @@ function withAccessories(m) {
     ...m,
     defaults: { ...ACCESSORY_DEFAULTS, ...m.defaults },
     fields: [...(m.fields || []), ...accessoryFields(m)]
+  }
+}
+
+function withFinishing(m) {
+  if (m.type === 'avulso') return m
+  return {
+    ...m,
+    defaults: { ...m.defaults, fitamento: 'padrao' },
+    fields: [...(m.fields || []), sf('fitamento', 'Fita de borda', FITAMENTO_OPTIONS)]
   }
 }
 
@@ -377,7 +406,7 @@ const MODEL_TAGS = {
 
 const MODELS = CATALOG_GROUPS.flatMap((g) =>
   g.models.map((m) =>
-    withAccessories(withDrawerHeight({ tags: MODEL_TAGS[`${m.type}:${m.variant}`] || [], ...m, group: g.group }))
+    withFinishing(withAccessories(withDrawerHeight({ tags: MODEL_TAGS[`${m.type}:${m.variant}`] || [], ...m, group: g.group })))
   )
 )
 
@@ -810,8 +839,22 @@ function generateCorePieces(item) {
   return []
 }
 
+function fitavel(nome) {
+  return !String(nome || '').toLowerCase().includes('fundo')
+}
+
+function applyFitamento(pieces, modo) {
+  const e = FITAMENTO_EDGES[modo]
+  if (!e) return pieces
+  return pieces.map((pc) => {
+    if (!fitavel(pc.name)) return pc
+    return { ...pc, edges: { ...e } }
+  })
+}
+
 export function generateFurniturePieces(item) {
-  return appendMdfFeet(generateCorePieces(item), item)
+  const core = appendMdfFeet(generateCorePieces(item), item)
+  return applyFitamento(core, (item.params || {}).fitamento)
 }
 
 export function flattenProjectPieces(project) {
@@ -851,6 +894,7 @@ export function furnitureSummaryLine(item) {
     if (p.gavetas) bits.push(`${nint(p.gavetas)} gav.`)
     if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
     if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
+    if (p.fitamento && p.fitamento !== 'padrao') bits.push(`fita: ${FITAMENTO_LABEL[p.fitamento] || p.fitamento}`)
     return bits.join(' · ')
   }
   const bits = [`${mm(p.width)} × ${mm(p.height || 0)} × ${mm(p.depth)} mm`]
@@ -859,5 +903,6 @@ export function furnitureSummaryLine(item) {
   if (p.shelves) bits.push(`${nint(p.shelves)} prat.`)
   if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
   if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
+  if (p.fitamento && p.fitamento !== 'padrao') bits.push(`fita: ${FITAMENTO_LABEL[p.fitamento] || p.fitamento}`)
   return bits.join(' · ')
 }

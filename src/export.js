@@ -75,6 +75,63 @@ export function exportPdf(project, settings, layout, summary, pieces) {
   doc.save(slug(project.name) + '-plano-corte.pdf')
 }
 
+export function exportCorteCloud(project, pieces, settings) {
+  const list = pieces || project.pieces || []
+  const s = settings || {}
+  const material = s.sheetName || 'MDF'
+  const tape = s.tapeName || 'Fita'
+  const header = [
+    'Quantidade',
+    'Comprimento',
+    'Largura',
+    'Função',
+    'Fita C1',
+    'Fita C2',
+    'Fita L1',
+    'Fita L2',
+    'Material',
+    'Complemento',
+    'Girar'
+  ]
+  const rows = [header.join(';')]
+  for (const p of list) {
+    const L = Number(p.length) || 0
+    const A = Number(p.width) || 0
+    const e = p.edges || {}
+    let comp = L
+    let larg = A
+    let c1 = e.front
+    let c2 = e.back
+    let l1 = e.left
+    let l2 = e.right
+    if (p.grain === 'largura') {
+      comp = A
+      larg = L
+      c1 = e.left
+      c2 = e.right
+      l1 = e.front
+      l2 = e.back
+    }
+    rows.push(
+      [
+        Math.max(0, Math.floor(Number(p.qty) || 0)),
+        comp,
+        larg,
+        p.name || '',
+        c1 ? tape : '',
+        c2 ? tape : '',
+        l1 ? tape : '',
+        l2 ? tape : '',
+        material,
+        p.furnitureName || '',
+        p.grain === 'livre' ? 'S' : ''
+      ].join(';')
+    )
+  }
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  download(blob, slug(project.name) + '-cortecloud.csv')
+}
+
 function packPdf(blob, filename) {
   let file = null
   try {

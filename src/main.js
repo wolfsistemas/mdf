@@ -16,7 +16,7 @@ import {
   formatMm
 } from './store.js'
 import { nest, summarize, edgeMeters, pieceAreaM2 } from './nesting.js'
-import { exportCsv, exportPdf, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
+import { exportCsv, exportCorteCloud, exportPdf, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
 import {
   CATALOG_GROUPS,
   modelMeta,
@@ -2789,6 +2789,7 @@ function tabsDef() {
 function topActions(p) {
   if (tab === 'projetos' || tab === 'conta' || !p) return []
   const btns = [h('button', { class: 'btn', title: 'Baixar CSV com todas as peças do projeto', onClick: () => exportCsv(p, piecesCache) }, ['CSV peças'])]
+  btns.push(h('button', { class: 'btn', title: 'Planilha para importar no CorteCloud', onClick: () => exportCorteCloud(p, piecesCache, state.settings) }, ['CorteCloud']))
   if (tab === 'orcamento') {
     btns.unshift(
       h('button', { class: 'btn', title: 'Enviar o orçamento em PDF', onClick: shareQuote }, ['Enviar PDF']),
