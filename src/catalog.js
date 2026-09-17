@@ -144,7 +144,7 @@ export const MESA_TAMPO_OPTIONS = [
   ['borda100', 'Borda 100 mm']
 ]
 
-const BORDA_H = { borda30: 30, borda50: 50, borda100: 100 }
+export const BORDA_H = { borda30: 30, borda50: 50, borda100: 100 }
 
 function finishingFields(m) {
   if (m.type === 'mesa') {

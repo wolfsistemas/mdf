@@ -1,3 +1,5 @@
+import { BORDA_H } from './catalog.js'
+
 function n(v, d = 0) {
   const x = Number(v)
   return Number.isFinite(x) ? x : d
@@ -66,7 +68,9 @@ function schematicFront(item, meta) {
   let inner = ''
   if (isDesk) {
     const thicknessMm = n(p.thickness, 15)
-    const topT = Math.max(6, thicknessMm * scale)
+    const dobraMm = p.tamponamento === 'dobra' ? Math.max(0, n(p.tampoT, 25)) : 0
+    const bordaMm = BORDA_H[p.tamponamento] || 0
+    const topT = Math.max(6, (thicknessMm + dobraMm) * scale)
     const topH = topT
     inner += `<rect x="${ox}" y="${oy}" width="${dw}" height="${topT}" fill="${color}" />`
     const legW = Math.max(6, 18 * scale)
@@ -96,6 +100,11 @@ function schematicFront(item, meta) {
 
     if (n(p.gavetas, 0) > 0) {
       inner += deskDrawerStack(p, ox, oy, dw, dh, topH, legW, legHmm, legHpx, scale, color)
+    }
+
+    if (bordaMm > 0) {
+      const bandPx = Math.max(2, bordaMm * scale)
+      inner += `<rect x="${ox}" y="${oy + topT}" width="${dw}" height="${bandPx}" fill="${shade(color, 16)}" />`
     }
   } else if (isShelf) {
     inner += `<rect x="${ox}" y="${oy}" width="${dw}" height="${dh}" fill="${color}" />`
@@ -309,6 +318,9 @@ function schematicLDesk3D(item) {
   const rD = Math.max(1, n(p.retDepth, 600))
   const tableH = Math.max(1, n(p.height, 750))
   const thk = Math.max(4, n(p.thickness, 15))
+  const dobraMm = p.tamponamento === 'dobra' ? Math.max(0, n(p.tampoT, 25)) : 0
+  const bordaMm = BORDA_H[p.tamponamento] || 0
+  const topMm = thk + dobraMm
   const saiaRaw = Math.max(0, n(p.saiaH, 120))
   const saiaCap = Math.max(40, Math.round((tableH - thk) * 0.6))
   const saiaMm = Math.min(saiaRaw || 120, saiaCap)
@@ -316,7 +328,7 @@ function schematicLDesk3D(item) {
   const gavetas = Math.max(0, Math.floor(n(p.gavetas, 0)))
   const elevated = p.drawerBase === 'alto'
   const caixote = p.drawerBase === 'caixote'
-  const gapMm = gavetas && (elevated || caixote) ? Math.min(Math.max(0, tableH - thk - 120), Math.max(40, n(p.baseH, 120))) : 0
+  const gapMm = gavetas && (elevated || caixote) ? Math.min(Math.max(0, tableH - topMm - 120), Math.max(40, n(p.baseH, 120))) : 0
 
   const main = { px0: 0, px1: W, pz0: 0, pz1: D }
   const ret =
@@ -383,11 +395,11 @@ function schematicLDesk3D(item) {
     let boxBot = gapMm
     if (caixote) {
       const want = Math.round(n(p.suspH, 0))
-      const auto = Math.min(tableH - thk - 150, 460)
-      const bodyH = Math.max(120, Math.min(tableH - thk - 60, want > 0 ? want : auto))
-      boxBot = Math.max(0, tableH - thk - bodyH)
+      const auto = Math.min(tableH - topMm - 150, 460)
+      const bodyH = Math.max(120, Math.min(tableH - topMm - 60, want > 0 ? want : auto))
+      boxBot = Math.max(0, tableH - topMm - bodyH)
     }
-    g += box(c0x, c0z, c1x, c1z, boxBot, tableH - thk, shade(color, -6))
+    g += box(c0x, c0z, c1x, c1z, boxBot, tableH - topMm, shade(color, -6))
   }
 
   const drawLeaf = (leaf, fill, tag) => {
@@ -395,7 +407,8 @@ function schematicLDesk3D(item) {
     const frontEdge = leaf.pz1
     const botY = 0
     const yTop = tableH
-    const legTop = tableH - thk
+    const legTop = tableH - topMm
+    const edgeBot = legTop - bordaMm
     if (p.pernas === 'pernas') {
       const pts = [
         [leaf.px0, leaf.pz0],
@@ -445,6 +458,11 @@ function schematicLDesk3D(item) {
     const c = P(leaf.px1, frontEdge, yTop)
     const d = P(leaf.px0, frontEdge, yTop)
     s += `<polygon points="${poly([a, b, c, d])}" fill="${shade(fill, 18)}" />`
+    if (bordaMm > 0) {
+      const a2 = P(leaf.px0, frontEdge, edgeBot)
+      const b2 = P(leaf.px1, frontEdge, edgeBot)
+      s += `<polygon points="${poly([a2, b2, b, a])}" fill="${shade(fill, 4)}" />`
+    }
 
     const topPts = [
       P(leaf.px0, leaf.pz0, yTop),
