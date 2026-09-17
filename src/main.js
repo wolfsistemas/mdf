@@ -2162,10 +2162,13 @@ function paramCards(item, material) {
   const acc = all.filter((f) => ACCESSORY_KEYS.includes(f.key))
   const cards = []
   if (rest.length) {
+    const checks = rest.filter((f) => f.kind === 'check')
+    const grid = rest.filter((f) => f.kind !== 'check')
     cards.push(
       h('div', { class: 'card' }, [
         h('div', { class: 'row', style: 'justify-content:space-between;align-items:center' }, [h('h3', {}, ['Medidas e opções']), material ? h('span', { class: 'help' }, [material]) : null]),
-        h('div', { class: 'param-grid', style: 'margin-top:6px' }, rest.map((f) => paramField(item, f)))
+        checks.length ? h('div', { class: 'param-checks' }, checks.map((f) => paramField(item, f))) : null,
+        grid.length ? h('div', { class: 'param-grid', style: 'margin-top:6px' }, grid.map((f) => paramField(item, f))) : null
       ])
     )
   }

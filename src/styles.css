@@ -847,6 +847,20 @@ td select {
   gap: 6px 10px;
 }
 
+.param-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  margin-top: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.param-checks .check-field {
+  padding: 4px 0;
+}
+
 .param-grid .field {
   min-width: 0;
 }
