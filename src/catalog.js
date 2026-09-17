@@ -237,7 +237,7 @@ export const CATALOG_GROUPS = [
         label: 'Mesa de reunião',
         blurb: 'Tampo reto alongado, sem gavetas.',
         defaults: { width: 2400, depth: 1200, height: 750, thickness: 15, modesty: 0, saiaH: 100 },
-        fields: [nf('width', 'Largura mm'), nf('depth', 'Profundidade mm'), nf('thickness', 'Esp. tampo mm'), ...MESA_SAIA()]
+        fields: [nf('width', 'Largura mm'), nf('depth', 'Profundidade mm'), nf('height', 'Altura mm'), nf('thickness', 'Esp. tampo mm'), ...MESA_SAIA()]
       }
     ]
   },
