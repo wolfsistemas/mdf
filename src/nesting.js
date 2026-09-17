@@ -283,7 +283,183 @@ function compactBoards(boards, kerf) {
       if (!out[i].placements.length) out.splice(i, 1)
     }
   }
+  for (const board of out) packTightBoard(board, kerf)
   return out
+}
+
+function lexLess(a, b) {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return a[i] < b[i]
+  }
+  return false
+}
+
+function contactAt(board, x, y, w, h, kerf) {
+  let c = 0
+  if (x <= 1e-6) c += h
+  if (y <= 1e-6) c += w
+  const x2 = x + w
+  const y2 = y + h
+  for (const p of board.placements) {
+    const px2 = p.x + p.w
+    const py2 = p.y + p.h
+    if (Math.abs(px2 + kerf - x) < 1.2 || Math.abs(x2 + kerf - p.x) < 1.2) {
+      const ov = Math.min(py2, y2) - Math.max(p.y, y)
+      if (ov > 0) c += ov
+    }
+    if (Math.abs(py2 + kerf - y) < 1.2 || Math.abs(y2 + kerf - p.y) < 1.2) {
+      const ov = Math.min(px2, x2) - Math.max(p.x, x)
+      if (ov > 0) c += ov
+    }
+  }
+  return c
+}
+
+function placeTight(board, item, kerf) {
+  const orients = orientations(item)
+  const usedH = board.placements.reduce((m, p) => Math.max(m, p.y + p.h), 0)
+  const usedW = board.placements.reduce((m, p) => Math.max(m, p.x + p.w), 0)
+  let best = null
+  let bestKey = null
+  for (const o of orients) {
+    for (const f of board.free) {
+      if (!fits(f.w, f.h, o.w, o.h)) continue
+      const ow = occupy(o.w, kerf, f.w)
+      const oh = occupy(o.h, kerf, f.h)
+      const contact = contactAt(board, f.x, f.y, o.w, o.h, kerf)
+      const growH = Math.max(usedH, f.y + o.h)
+      const growW = Math.max(usedW, f.x + o.w)
+      const key = [growH, growW, f.y, f.x, -contact]
+      if (!best || lexLess(key, bestKey)) {
+        best = { f, o, ow, oh }
+        bestKey = key
+      }
+    }
+  }
+  if (!best) return false
+  board.free = splitFree(board.free, { x: best.f.x, y: best.f.y, w: best.ow, h: best.oh })
+  board.placements.push(placeRecord(item, best.o, best.f.x, best.f.y))
+  return true
+}
+
+function leftoverScore(board) {
+  const usedH = (board.placements || []).reduce((m, p) => Math.max(m, p.y + p.h), 0)
+  const usedW = (board.placements || []).reduce((m, p) => Math.max(m, p.x + p.w), 0)
+  const bottom = Math.max(0, board.H - usedH) * board.W
+  const right = Math.max(0, board.W - usedW) * board.H
+  const free = board.free || []
+  return [Math.max(bottom, right), -usedH, -usedW, -(free.length || 0)]
+}
+
+function emptyLike(board) {
+  const b = newBoard(board.W, board.H, board.mode, board.thickness)
+  b.spec = board.spec
+  return b
+}
+
+function packWith(board, items, kerf, sorter, placer) {
+  const fresh = emptyLike(board)
+  const sorted = [...items].sort(sorter)
+  for (const item of sorted) {
+    if (!placer(fresh, item, kerf)) return null
+  }
+  rebuildFree(fresh, kerf)
+  return fresh
+}
+
+function packTightBoard(board, kerf) {
+  gravityBoard(board, kerf)
+  const items = (board.placements || []).map(itemFromPlacement)
+  if (items.length < 2) return
+  const areaSort = (a, b) => b.length * b.width - a.length * a.width || Math.max(b.length, b.width) - Math.max(a.length, a.width)
+  const bulkyFirst = (a, b) => {
+    const amin = Math.min(a.length, a.width)
+    const bmin = Math.min(b.length, b.width)
+    if (bmin !== amin) return bmin - amin
+    return areaSort(a, b)
+  }
+  const lockedFirst = (a, b) => {
+    const ga = a.hidden || a.grain === 'livre' ? 1 : 0
+    const gb = b.hidden || b.grain === 'livre' ? 1 : 0
+    if (ga !== gb) return ga - gb
+    return bulkyFirst(a, b)
+  }
+  const asPlaced = () => 0
+  const attempts = [
+    [areaSort, placeGuillotine],
+    [bulkyFirst, placeGuillotine],
+    [lockedFirst, placeGuillotine],
+    [areaSort, placeTight],
+    [bulkyFirst, placeTight],
+    [lockedFirst, placeTight],
+    [asPlaced, placeTight]
+  ]
+  rebuildFree(board, kerf)
+  let best = board
+  let bestScore = leftoverScore(board)
+  for (const [sorter, placer] of attempts) {
+    const packed = packWith(board, items, kerf, sorter, placer)
+    if (!packed || packed.placements.length !== items.length) continue
+    gravityBoard(packed, kerf)
+    const score = leftoverScore(packed)
+    if (lexLess(bestScore, score)) {
+      best = packed
+      bestScore = score
+    }
+  }
+  if (best !== board) {
+    board.placements = best.placements
+    board.free = best.free
+    board.strips = best.strips
+  }
+  gravityBoard(board, kerf)
+}
+
+function overlapGap(a, b, kerf) {
+  return a.x < b.x + b.w + kerf - 1e-6 && a.x + a.w + kerf - 1e-6 > b.x && a.y < b.y + b.h + kerf - 1e-6 && a.y + a.h + kerf - 1e-6 > b.y
+}
+
+function canSit(board, p, x, y, kerf) {
+  if (x < -1e-6 || y < -1e-6 || x + p.w > board.W + 1e-6 || y + p.h > board.H + 1e-6) return false
+  const me = { x, y, w: p.w, h: p.h }
+  for (const q of board.placements) {
+    if (q === p) continue
+    if (overlapGap(me, q, kerf)) return false
+  }
+  return true
+}
+
+function gravityBoard(board, kerf) {
+  const snaps = (axis) => {
+    const s = new Set([0])
+    for (const p of board.placements) s.add(axis === 'x' ? p.x + p.w + kerf : p.y + p.h + kerf)
+    return [...s].filter((v) => v >= -1e-6).sort((a, b) => a - b)
+  }
+  let moved = true
+  let guard = 0
+  while (moved && guard++ < 40) {
+    moved = false
+    const order = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
+    for (const p of order) {
+      for (const x of snaps('x')) {
+        if (x >= p.x - 1e-6) break
+        if (canSit(board, p, x, p.y, kerf)) {
+          p.x = x
+          moved = true
+          break
+        }
+      }
+      for (const y of snaps('y')) {
+        if (y >= p.y - 1e-6) break
+        if (canSit(board, p, p.x, y, kerf)) {
+          p.y = y
+          moved = true
+          break
+        }
+      }
+    }
+  }
+  rebuildFree(board, kerf)
 }
 
 function newBoard(W, H, mode, thickness) {
