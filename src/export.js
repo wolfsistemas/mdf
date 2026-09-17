@@ -375,7 +375,7 @@ function boardPage(doc, project, settings, board, pageW, pageH, margin) {
   doc.setFontSize(9)
   doc.setTextColor(90, 78, 66)
   doc.text(
-    `${board.sheetName || settings.sheetName || 'MDF'} · ${board.sheetWidth} × ${board.sheetHeight} × ${board.thickness || settings.sheetThickness} mm · aproveitamento ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças · modo ${board.mode === 'free' ? 'nesting livre' : 'serra / guilhotina'}`,
+    `${board.sheetName || settings.sheetName || 'MDF'} · ${board.sheetWidth} × ${board.sheetHeight} × ${board.thickness || settings.sheetThickness} mm · aproveitamento ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças · modo ${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'mac' ? 'MAC' : 'nesting livre'}`,
     margin,
     24
   )

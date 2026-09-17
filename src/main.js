@@ -2580,7 +2580,7 @@ function sequenceEl(board) {
   const rows = cutSequence(board)
   if (!rows.length) return null
   return h('div', { class: 'cut-sequence' }, [
-    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'free' ? 'livre' : 'serra / guilhotina'})`]),
+    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'mac' ? 'MAC' : 'livre'})`]),
     ...rows.map((row, i) =>
       h('div', { class: 'cut-row' }, [
         h('b', {}, [`Faixa ${i + 1} · ${Math.round(row.height)} mm`]),
