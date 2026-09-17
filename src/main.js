@@ -2543,11 +2543,14 @@ function tabPecas() {
 function tabCorte() {
   const layout = layoutCache
   const s = state.settings
+  const cutLabel =
+    { guillotine: 'serra / guilhotina', free: 'nesting livre', mac: 'MAC (máximo aproveitamento)' }[s.cutMode] ||
+    'serra / guilhotina'
   const summary = h('div', { class: 'card' }, [
     h('h2', {}, ['Plano de corte do projeto']),
     h('p', { class: 'help' }, [
       layout.sheetsNeeded
-        ? `${layout.sheetsNeeded} chapa(s) · aproveitamento ${layout.efficiency.toFixed(1)}% · modo ${s.cutMode === 'free' ? 'nesting livre' : 'serra / guilhotina'} · kerf ${s.kerf} mm. Cores = móvel.`
+        ? `${layout.sheetsNeeded} chapa(s) · aproveitamento ${layout.efficiency.toFixed(1)}% · modo ${cutLabel} · kerf ${s.kerf} mm. Cores = móvel.`
         : 'Adicione móveis para gerar o nesting.'
     ]),
     legend(),
@@ -2842,7 +2845,7 @@ function tabConta() {
         )
       ]),
       h('p', { class: 'help' }, [
-        'Kerf é a perda da serra. Refilo reserva a borda da chapa. Serra/guilhotina gera faixas. Nesting livre encaixa melhor.'
+        'Kerf é a perda da serra. Refilo reserva a borda da chapa. Serra/guilhotina gera faixas. Nesting livre encaixa melhor. MAC junta as peças no canto (máximo aproveitamento, deixa a sobra numa faixa só) — o desenho pode não sair em cortes retos.'
       ])
     ]),
     extraSheetsCard(s, set),

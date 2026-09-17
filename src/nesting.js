@@ -477,7 +477,9 @@ function newBoard(W, H, mode, thickness) {
 export function nest(pieces, settings) {
   const kerf = Math.max(0, Number(settings.kerf) || 0)
   const trim = Math.max(0, Number(settings.trim) || 0)
-  const mode = settings.cutMode === 'free' ? 'free' : 'guillotine'
+  const rawMode = ['mac', 'free'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
+  const mode = rawMode === 'guillotine' ? 'guillotine' : 'free'
+  const tight = rawMode === 'mac'
   const specs = sheetSpecs(settings).filter((sp) => sp.width - 2 * trim > 0 && sp.height - 2 * trim > 0)
   const empty = {
     boards: [],
@@ -561,14 +563,14 @@ export function nest(pieces, settings) {
       }
     }
 
-    const compacted = compactBoards(boards, kerf)
-    for (const board of compacted) {
+    const result = tight ? compactBoards(boards, kerf) : boards
+    for (const board of result) {
       const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
       ordered.forEach((p, i) => {
         p.order = i + 1
       })
     }
-    return { boards: compacted, unplaced }
+    return { boards: result, unplaced }
   }
 
   const finish = (boards, unplaced) => {
@@ -595,7 +597,7 @@ export function nest(pieces, settings) {
         sheetArea: sp.width * sp.height,
         wasteArea: Math.max(0, usable - used),
         efficiency: usable > 0 ? (used / usable) * 100 : 0,
-        mode
+        mode: rawMode
       }
     })
 
