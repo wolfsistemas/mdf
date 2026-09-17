@@ -43,10 +43,11 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Tamponamento de faces aparentes (laterais, topo e base; painel inteiro ou sarrafo)
 - Tamponamento de tampo de mesa: reforco (dobrar/engrossar o tampo) ou borda de 30/50/100 mm, no tampo e nas laterais/pes
 - Gaveteiro suspenso com fechadura configuravel
-- Plano de corte 2D em 3 modos: serra/guilhotina (padrao), nesting livre e MAC (maximo aproveitamento — junta as pecas num canto e deixa a sobra numa faixa so)
+- Plano de corte 2D em 4 modos: serra/guilhotina (padrao), nesting livre, MAC (maximo aproveitamento) e manual (arrastar pecas na chapa)
+- No modo manual da para arrastar cada peca: encaixa nas bordas e no kerf da serra, fica vermelho em posicao invalida, com Desfazer e Limpar ajustes
 - Pecas ocultas (fundos, caixotes de gaveta e tamponamento) entram como aproveitamento: podem girar e sao posicionadas por ultimo, para preencher sobras antes de abrir outra chapa (o app testa variacoes e usa a de menor numero de chapas)
 - Depois do encaixe, pecas da ultima chapa sao recolocadas nas sobras das chapas anteriores, se couberem, para nao abrir chapa extra
-- Pecas de aproveitamento (sem veio) sao agrupadas no canto da chapa, para a sobra ficar numa faixa continua reaproveitavel
+- No modo MAC as pecas de aproveitamento (sem veio) sao agrupadas no canto da chapa, para a sobra ficar numa faixa continua reaproveitavel
 - Numeracao e sequencia de corte por chapa (faixas) e exportacao do plano em PNG
 - Kerf (perda da serra) e refilo
 - Chapa padrao 2750 x 1830 mm, espessura padrao 15 mm

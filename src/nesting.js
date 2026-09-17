@@ -415,7 +415,7 @@ function packTightBoard(board, kerf) {
   gravityBoard(board, kerf)
 }
 
-function overlapGap(a, b, kerf) {
+export function overlapGap(a, b, kerf) {
   return a.x < b.x + b.w + kerf - 1e-6 && a.x + a.w + kerf - 1e-6 > b.x && a.y < b.y + b.h + kerf - 1e-6 && a.y + a.h + kerf - 1e-6 > b.y
 }
 
@@ -427,6 +427,47 @@ function canSit(board, p, x, y, kerf) {
     if (overlapGap(me, q, kerf)) return false
   }
   return true
+}
+
+export function placementFits(board, c) {
+  return c.x >= -0.5 && c.y >= -0.5 && c.x + c.w <= board.packW + 0.5 && c.y + c.h <= board.packH + 0.5
+}
+
+function manualCandidate(piece, move) {
+  const rotated = !!move.rotated
+  const length = Number(piece.length) || piece.w
+  const width = Number(piece.width) || piece.h
+  return {
+    x: Number(move.x),
+    y: Number(move.y),
+    w: rotated ? width : length,
+    h: rotated ? length : width,
+    rotated
+  }
+}
+
+export function applyManualMoves(layout, moves) {
+  if (!layout || !moves) return layout
+  for (const board of layout.boards) {
+    const moved = board.placements.filter((q) => moves[q.uid])
+    if (!moved.length) continue
+    const settled = board.placements
+      .filter((q) => !moves[q.uid])
+      .map((q) => ({ x: q.x, y: q.y, w: q.w, h: q.h }))
+    for (const piece of moved) {
+      const cand = manualCandidate(piece, moves[piece.uid])
+      if (!Number.isFinite(cand.x) || !Number.isFinite(cand.y)) continue
+      if (!placementFits(board, cand)) continue
+      if (settled.some((q) => overlapGap(cand, q, board.kerf))) continue
+      piece.x = cand.x
+      piece.y = cand.y
+      piece.rotated = cand.rotated
+      piece.w = cand.w
+      piece.h = cand.h
+      settled.push(cand)
+    }
+  }
+  return layout
 }
 
 function gravityBoard(board, kerf) {
@@ -477,7 +518,7 @@ function newBoard(W, H, mode, thickness) {
 export function nest(pieces, settings) {
   const kerf = Math.max(0, Number(settings.kerf) || 0)
   const trim = Math.max(0, Number(settings.trim) || 0)
-  const rawMode = ['mac', 'free'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
+  const rawMode = ['mac', 'free', 'manual'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
   const mode = rawMode === 'guillotine' ? 'guillotine' : 'free'
   const tight = rawMode === 'mac'
   const specs = sheetSpecs(settings).filter((sp) => sp.width - 2 * trim > 0 && sp.height - 2 * trim > 0)

@@ -17,7 +17,7 @@ import {
   formatMeters,
   formatMm
 } from './store.js'
-import { nest, summarize, cutSequence, edgeMeters, pieceAreaM2 } from './nesting.js'
+import { nest, summarize, cutSequence, edgeMeters, pieceAreaM2, overlapGap, placementFits, applyManualMoves } from './nesting.js'
 import { exportCsv, exportCorteCloud, exportPdf, exportPlanPng, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
 import {
   CATALOG_GROUPS,
@@ -131,6 +131,7 @@ function recalc() {
   }
   piecesCache = flattenProjectPieces(p)
   layoutCache = nest(piecesCache, state.settings)
+  applyManualMoves(layoutCache, state.settings.cutMode === 'manual' ? p.manual : null)
   summaryCache = summarize(p, state.settings, layoutCache, piecesCache)
   saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, p.billingBasis || 'used', layoutCache)
 }
@@ -2538,14 +2539,163 @@ function tabPecas() {
   ])
 }
 
+/* ============================== CORTE MANUAL ============================== */
+
+let manualUndo = []
+
+function manualMap() {
+  const p = project()
+  if (!p) return null
+  if (!p.manual || typeof p.manual !== 'object') p.manual = {}
+  return p.manual
+}
+
+function pushManualUndo() {
+  const p = project()
+  if (!p) return
+  manualUndo.push({ id: p.id, data: JSON.stringify(p.manual || {}) })
+  if (manualUndo.length > 50) manualUndo.shift()
+}
+
+function manualSnapTargets(board, piece, axis, size) {
+  const out = axis === 'x' ? [0, board.packW - size] : [0, board.packH - size]
+  for (const q of board.placements) {
+    if (q === piece) continue
+    if (axis === 'x') out.push(q.x - size - board.kerf, q.x + q.w + board.kerf)
+    else out.push(q.y - size - board.kerf, q.y + q.h + board.kerf)
+  }
+  return out
+}
+
+function snapValue(value, targets, tol) {
+  let best = value
+  let dist = tol
+  for (const t of targets) {
+    const d = Math.abs(value - t)
+    if (d < dist) {
+      dist = d
+      best = t
+    }
+  }
+  return best
+}
+
+function moveFits(board, piece, cand) {
+  if (!placementFits(board, cand)) return false
+  for (const q of board.placements) {
+    if (q === piece) continue
+    if (overlapGap(cand, q, board.kerf)) return false
+  }
+  return true
+}
+
+function attachManualDrag(board, box, piece, scale) {
+  if (!(scale > 0)) return
+  box.classList.add('piece-drag')
+  box.addEventListener('pointerdown', (ev) => {
+    if (ev.button != null && ev.button !== 0) return
+    ev.preventDefault()
+    const startX = ev.clientX
+    const startY = ev.clientY
+    const ox = piece.x
+    const oy = piece.y
+    const w = piece.w
+    const h = piece.h
+    const tol = 6
+    let last = { x: ox, y: oy }
+    let valid = true
+    pushManualUndo()
+    box.classList.add('dragging')
+    const onMove = (e) => {
+      let nx = ox + (e.clientX - startX) / scale
+      let ny = oy + (e.clientY - startY) / scale
+      nx = snapValue(nx, manualSnapTargets(board, piece, 'x', w), tol)
+      ny = snapValue(ny, manualSnapTargets(board, piece, 'y', h), tol)
+      nx = Math.max(0, Math.min(board.packW - w, nx))
+      ny = Math.max(0, Math.min(board.packH - h, ny))
+      last = { x: nx, y: ny }
+      valid = moveFits(board, piece, { x: nx, y: ny, w, h })
+      box.style.left = `${(board.trim + nx) * scale}px`
+      box.style.top = `${(board.trim + ny) * scale}px`
+      box.classList.toggle('piece-bad', !valid)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      box.classList.remove('dragging', 'piece-bad')
+      const unchanged = Math.abs(last.x - ox) < 0.05 && Math.abs(last.y - oy) < 0.05
+      if (!valid || unchanged) {
+        manualUndo.pop()
+        if (!valid && !unchanged) render()
+        return
+      }
+      const map = manualMap()
+      if (!map) return
+      map[piece.uid] = {
+        x: Math.round(last.x * 10) / 10,
+        y: Math.round(last.y * 10) / 10,
+        rotated: !!piece.rotated
+      }
+      persist({ silent: true })
+      recalc()
+      render()
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  })
+}
+
+function undoManual() {
+  const p = project()
+  if (!p) return
+  while (manualUndo.length && manualUndo[manualUndo.length - 1].id !== p.id) manualUndo.pop()
+  if (!manualUndo.length) return
+  p.manual = JSON.parse(manualUndo.pop().data)
+  persist({ silent: true })
+  recalc()
+  render()
+}
+
+function clearManual() {
+  const p = project()
+  if (!p || !p.manual || !Object.keys(p.manual).length) return
+  pushManualUndo()
+  p.manual = {}
+  persist({ silent: true })
+  recalc()
+  render()
+}
+
+function manualToolbar() {
+  const p = project()
+  const count = p && p.manual ? Object.keys(p.manual).length : 0
+  return h('div', { class: 'card' }, [
+    h('h2', {}, ['Ajuste manual do plano']),
+    h('p', { class: 'help' }, [
+      'Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). As peças tracejadas são aproveitamento (fundos e caixotes).'
+    ]),
+    h('div', { class: 'row' }, [
+      h('button', { class: 'btn', disabled: !manualUndo.length, onClick: undoManual }, ['Desfazer']),
+      h('button', { class: 'btn', disabled: !count, onClick: clearManual }, ['Limpar ajustes']),
+      h('span', { class: 'help', style: 'align-self:center' }, [
+        count ? `${count} peça(s) com posição manual` : 'Nenhum ajuste manual ainda'
+      ])
+    ])
+  ])
+}
+
 /* ============================== ABA CORTE ============================== */
 
 function tabCorte() {
   const layout = layoutCache
   const s = state.settings
   const cutLabel =
-    { guillotine: 'serra / guilhotina', free: 'nesting livre', mac: 'MAC (máximo aproveitamento)' }[s.cutMode] ||
-    'serra / guilhotina'
+    { guillotine: 'serra / guilhotina', free: 'nesting livre', mac: 'MAC (máximo aproveitamento)', manual: 'manual' }[
+      s.cutMode
+    ] || 'serra / guilhotina'
+  const manual = s.cutMode === 'manual'
   const summary = h('div', { class: 'card' }, [
     h('h2', {}, ['Plano de corte do projeto']),
     h('p', { class: 'help' }, [
@@ -2566,6 +2716,7 @@ function tabCorte() {
   return h('div', {}, [
     kpis(),
     summary,
+    manual ? manualToolbar() : null,
     h(
       'div',
       { class: 'sheet-wrap', id: 'plan-sheets' },
@@ -2580,7 +2731,7 @@ function sequenceEl(board) {
   const rows = cutSequence(board)
   if (!rows.length) return null
   return h('div', { class: 'cut-sequence' }, [
-    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'mac' ? 'MAC' : 'livre'})`]),
+    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'mac' ? 'MAC' : board.mode === 'manual' ? 'manual' : 'livre'})`]),
     ...rows.map((row, i) =>
       h('div', { class: 'cut-row' }, [
         h('b', {}, [`Faixa ${i + 1} · ${Math.round(row.height)} mm`]),
@@ -2609,13 +2760,14 @@ function legend() {
 }
 
 function sheetEl(board) {
+  const manual = state.settings.cutMode === 'manual'
   const pad = isMobileNow() ? 48 : 80
   const maxW = Math.min(920, Math.max(220, window.innerWidth - pad))
   const scale = maxW / board.sheetWidth
   const w = board.sheetWidth * scale
   const hgt = board.sheetHeight * scale
   const sheet = h('div', {
-    class: 'sheet',
+    class: 'sheet' + (manual ? ' sheet-manual' : ''),
     style: `width:${w}px;height:${hgt}px`
   })
   board.placements.forEach((p) => {
@@ -2623,7 +2775,11 @@ function sheetEl(board) {
       'div',
       {
         class: 'piece-box' + (p.hidden ? ' piece-fill' : ''),
-        title: p.hidden ? 'Aproveitamento (peça oculta — pode girar e usar sobras)' : '',
+        title: manual
+          ? 'Arraste para reposicionar'
+          : p.hidden
+            ? 'Aproveitamento (peça oculta — pode girar e usar sobras)'
+            : '',
         style: [
           `left:${(board.trim + p.x) * scale}px`,
           `top:${(board.trim + p.y) * scale}px`,
@@ -2638,6 +2794,7 @@ function sheetEl(board) {
         h('span', {}, [`${Math.round(p.w)} × ${Math.round(p.h)} mm`])
       ]
     )
+    if (manual) attachManualDrag(board, box, p, scale)
     sheet.append(box)
   })
   return h('div', { style: 'margin-bottom:18px' }, [
@@ -2845,7 +3002,7 @@ function tabConta() {
         )
       ]),
       h('p', { class: 'help' }, [
-        'Kerf é a perda da serra. Refilo reserva a borda da chapa. Serra/guilhotina gera faixas. Nesting livre encaixa melhor. MAC junta as peças no canto (máximo aproveitamento, deixa a sobra numa faixa só) — o desenho pode não sair em cortes retos.'
+        'Kerf é a perda da serra. Refilo reserva a borda da chapa. Serra/guilhotina gera faixas. Nesting livre encaixa melhor. MAC junta as peças no canto (máximo aproveitamento, deixa a sobra numa faixa só) — o desenho pode não sair em cortes retos. Manual deixa você arrastar as peças na aba Corte.'
       ])
     ]),
     extraSheetsCard(s, set),

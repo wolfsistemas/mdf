@@ -11,7 +11,8 @@ export const GRAIN = {
 export const CUT_MODES = {
   guillotine: 'Serra / guilhotina',
   free: 'Nesting livre',
-  mac: 'MAC — Máximo aproveitamento'
+  mac: 'MAC — Máximo aproveitamento',
+  manual: 'Manual — mover peças'
 }
 
 export const THICKNESS_PRESETS = [6, 15, 18, 25]

@@ -413,6 +413,29 @@ td select {
   opacity: 0.88;
 }
 
+.piece-box.piece-drag {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.piece-box.piece-drag.dragging {
+  cursor: grabbing;
+  z-index: 5;
+  opacity: 0.94;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5);
+}
+
+.piece-box.piece-bad {
+  outline: 2px solid #ff5252;
+  outline-offset: -2px;
+  background: #7a1f1f !important;
+}
+
+.sheet-manual {
+  touch-action: none;
+}
+
 .piece-order {
   position: absolute;
   top: 2px;
