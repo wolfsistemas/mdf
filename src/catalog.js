@@ -302,6 +302,9 @@ export const CATALOG_GROUPS = [
     models: [
       { type: 'gaveteiro', variant: '2', label: 'Gaveteiro 2 gavetas', blurb: 'Pequeno, uso sob mesa.', defaults: { width: 420, height: 460, depth: 460, gavetas: 2, carcassT: 15, backT: 15, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
       { type: 'gaveteiro', variant: '3', label: 'Gaveteiro 3 gavetas', blurb: 'Padrão de escritório.', defaults: { width: 450, height: 640, depth: 480, gavetas: 3, carcassT: 15, backT: 15, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
+      { type: 'gaveteiro', variant: 'suspenso-1', label: 'Gaveteiro suspenso 1 gaveta', blurb: 'Preso sob o tampo e na lateral, sem pés.', defaults: { width: 420, height: 300, depth: 460, gavetas: 1, carcassT: 15, backT: 15, frontT: 15, pe: 'nenhum', puxador: 'concha', fechadura: 1 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
+      { type: 'gaveteiro', variant: 'suspenso-2', label: 'Gaveteiro suspenso 2 gavetas', blurb: 'Preso sob o tampo e na lateral, sem pés.', defaults: { width: 420, height: 460, depth: 460, gavetas: 2, carcassT: 15, backT: 15, frontT: 15, pe: 'nenhum', puxador: 'concha', fechadura: 1 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
+      { type: 'gaveteiro', variant: 'suspenso-3', label: 'Gaveteiro suspenso 3 gavetas', blurb: 'Preso sob o tampo e na lateral, sem pés.', defaults: { width: 450, height: 640, depth: 480, gavetas: 3, carcassT: 15, backT: 15, frontT: 15, pe: 'nenhum', puxador: 'concha', fechadura: 1 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
       { type: 'gaveteiro', variant: '4', label: 'Gaveteiro 4 gavetas', blurb: 'Volumoso, uso geral.', defaults: { width: 450, height: 760, depth: 480, gavetas: 4, carcassT: 15, backT: 15, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
       { type: 'gaveteiro', variant: '5', label: 'Gaveteiro 5 gavetas', blurb: 'Alto, gavetas estreitas.', defaults: { width: 450, height: 900, depth: 480, gavetas: 5, carcassT: 15, backT: 15, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
       { type: 'gaveteiro', variant: 'arquivo', label: 'Arquivo de documentos', blurb: 'Gavetas altas p/ pastas suspensas.', defaults: { width: 460, height: 1320, depth: 620, gavetas: 2, carcassT: 15, backT: 15, frontT: 15 }, fields: [nf('width', 'Largura mm'), nf('height', 'Altura mm'), nf('depth', 'Profundidade mm'), nf('gavetas', 'Gavetas'), nf('carcassT', 'Esp. caixa mm'), nf('backT', 'Esp. fundo mm'), nf('frontT', 'Esp. frente mm')] },
@@ -387,6 +390,9 @@ const MODEL_TAGS = {
   'guarda-roupa:closet': ['quarto', 'closet', 'cabideiro'],
   'gaveteiro:2': ['escritório', 'quarto'],
   'gaveteiro:3': ['escritório'],
+  'gaveteiro:suspenso-1': ['escritório', 'mesa', 'suspenso', 'gavetas'],
+  'gaveteiro:suspenso-2': ['escritório', 'mesa', 'suspenso', 'gavetas'],
+  'gaveteiro:suspenso-3': ['escritório', 'mesa', 'suspenso', 'gavetas'],
   'gaveteiro:4': ['escritório', 'quarto'],
   'gaveteiro:5': ['escritório'],
   'gaveteiro:arquivo': ['escritório', 'documentos', 'pasta'],
@@ -672,7 +678,6 @@ function deskPedestal(p, colW, colDepth, baseT = 15, frontT = 15) {
   push(out, part('Gaveteiro — lateral', bodyH, colDepth, baseT, 2, 'comprimento', lEdge))
   push(out, part('Gaveteiro — base', colW, colDepth, baseT, 1, 'comprimento', fEdge))
   push(out, part('Gaveteiro — tampo', colW, colDepth, baseT, 1, 'comprimento', fEdge))
-  if (gap > 0) push(out, part('Gaveteiro — pé', gap, 70, baseT, 4, 'comprimento', lEdge))
   const faceH = drawerFront(p, bodyH, n)
   const faceW = Math.max(80, colW - 2)
   push(out, part('Gaveteiro — frente', faceH, faceW, frontT, n, 'comprimento', tEdge))
@@ -769,7 +774,8 @@ function peQty(p) {
 }
 
 function skipFeet(item) {
-  return item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno'
+  const v = String(item.variant || '')
+  return v === 'aereo' || v === 'espelheira' || v === 'forno' || v.startsWith('suspenso')
 }
 
 function appendMdfFeet(out, item) {
@@ -794,7 +800,7 @@ export function hardwareCounts(item) {
   const p = item.params || {}
   const type = item.type
   if (type === 'avulso' || type === 'prateleira') {
-    return { handles: 0, hinges: 0, slides: 0, tracks: 0, feetBuy: 0, pe: 'nenhum', puxador: 'nenhum' }
+    return { handles: 0, hinges: 0, slides: 0, tracks: 0, feetBuy: 0, locks: 0, pe: 'nenhum', puxador: 'nenhum' }
   }
   const doors = type === 'armario' || type === 'guarda-roupa' ? nint(num(p, 'doors', 0)) : 0
   const drawers =
@@ -809,7 +815,8 @@ export function hardwareCounts(item) {
   const slides = drawers
   const tracks = sliding && doors > 0 ? 1 : 0
   const feetBuy = pe === 'regulavel' || pe === 'rodizio' ? peQty(p) : 0
-  return { handles, hinges, slides, tracks, feetBuy, pe, puxador, doors, drawers, sliding }
+  const locks = num(p, 'fechadura', 0) > 0 ? drawers : 0
+  return { handles, hinges, slides, tracks, feetBuy, locks, pe, puxador, doors, drawers, sliding }
 }
 
 function generateCorePieces(item) {
@@ -898,6 +905,7 @@ export function furnitureSummaryLine(item) {
     return bits.join(' · ')
   }
   const bits = [`${mm(p.width)} × ${mm(p.height || 0)} × ${mm(p.depth)} mm`]
+  if (String(item.variant || '').startsWith('suspenso')) bits.push('suspenso')
   if (p.doors) bits.push(`${nint(p.doors)} porta(s)`)
   if (p.gavetas) bits.push(`${nint(p.gavetas)} gav.`)
   if (p.shelves) bits.push(`${nint(p.shelves)} prat.`)

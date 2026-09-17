@@ -2135,7 +2135,7 @@ function isParamHidden(item, f) {
   if (f.key === 'frontT') return noDrawers
   if (f.key === 'doorT') return noDoors && noDrawers
   if (f.key === 'backT') return !Number(p.hasBack ?? 1)
-  const peOff = item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno'
+  const peOff = item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno' || String(item.variant || '').startsWith('suspenso')
   const pe = p.pe || 'nenhum'
   if (f.key === 'pe' || f.key === 'peH' || f.key === 'peQty') {
     if (peOff) return true
@@ -2765,10 +2765,11 @@ function tabConta() {
         field('Corrediça (par)', inputNum(s.slidePrice || 0, (v) => set({ slidePrice: v }), { step: '0.01' })),
         field('Puxador', inputNum(s.handlePrice || 0, (v) => set({ handlePrice: v }), { step: '0.01' })),
         field('Trilho de correr', inputNum(s.trackPrice || 0, (v) => set({ trackPrice: v }), { step: '0.01' })),
-        field('Pé regulável / rodízio', inputNum(s.footPrice || 0, (v) => set({ footPrice: v }), { step: '0.01' }))
+        field('Pé regulável / rodízio', inputNum(s.footPrice || 0, (v) => set({ footPrice: v }), { step: '0.01' })),
+        field('Fechadura', inputNum(s.lockPrice || 0, (v) => set({ lockPrice: v }), { step: '0.01' }))
       ]),
       h('p', { class: 'help' }, [
-        'Dobradiça: 2 por porta de abrir (3 se a porta passar de 1800 mm). Corrediça: 1 par por gaveta. Puxador: 1 por porta ou gaveta. Pé de MDF entra no corte; regulável e rodízio só no custo.'
+        'Dobradiça: 2 por porta de abrir (3 se a porta passar de 1800 mm). Corrediça: 1 par por gaveta. Puxador: 1 por porta ou gaveta. Fechadura: 1 por gaveta nos gaveteiros suspensos. Pé de MDF entra no corte; regulável e rodízio só no custo.'
       ])
     ])
   ])
