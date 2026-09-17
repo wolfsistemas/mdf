@@ -41,9 +41,11 @@ const DESK_DRAWERS = () => [
   nf('gavH', 'Altura da gaveta mm (0 = automática)'),
   sf('drawerBase', 'Base das gavetas', [
     ['chao', 'Gavetas até o chão'],
-    ['alto', 'Suspensas (vão embaixo)']
+    ['alto', 'Coluna suspensa (vão embaixo)'],
+    ['caixote', 'Caixote suspenso sob o tampo']
   ]),
-  nf('baseH', 'Vão sob as gavetas mm')
+  nf('baseH', 'Vão sob as gavetas mm'),
+  nf('suspH', 'Altura do caixote mm (0 = automática)')
 ]
 const MESA_SAIA = () => [cf('modesty', 'Saia / vedação'), nf('saiaH', 'Altura da saia mm')]
 
@@ -708,11 +710,20 @@ function deskPedestal(p, colW, colDepth, baseT = 15, frontT = 15) {
   if (!n || colW <= 0 || colDepth <= 0) return out
   const legH = Math.max(160, mm(num(p, 'height', 750)) - mm(num(p, 'thickness', 15)))
   const elevated = p.drawerBase === 'alto'
-  const gap = elevated ? Math.min(legH - 120, Math.max(40, mm(num(p, 'baseH', 120)))) : 0
-  const bodyH = Math.max(120, legH - gap)
+  const caixote = p.drawerBase === 'caixote'
+  const gap = elevated || caixote ? Math.min(legH - 120, Math.max(40, mm(num(p, 'baseH', 120)))) : 0
+  let bodyH = Math.max(120, legH - gap)
+  if (caixote) {
+    const want = mm(num(p, 'suspH', 0))
+    const auto = Math.min(legH - 150, 460)
+    bodyH = Math.max(120, Math.min(legH - 60, want > 0 ? want : auto))
+  }
   push(out, part('Gaveteiro — lateral', bodyH, colDepth, baseT, 2, 'comprimento', lEdge))
   push(out, part('Gaveteiro — base', colW, colDepth, baseT, 1, 'comprimento', fEdge))
   push(out, part('Gaveteiro — tampo', colW, colDepth, baseT, 1, 'comprimento', fEdge))
+  if (caixote) {
+    push(out, part('Gaveteiro — fundo', Math.max(0, colW - 2 * baseT), Math.max(0, bodyH - 2 * baseT), 15, 1, 'livre', edges(false, false, false, false)))
+  }
   const faceH = drawerFront(p, bodyH, n)
   const faceW = Math.max(80, colW - 2)
   push(out, part('Gaveteiro — frente', faceH, faceW, frontT, n, 'comprimento', tEdge))

@@ -35,7 +35,7 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Base de cobranca das chapas **por orcamento**: por area usada ou incluindo o custo das sobras (aproveitamento) rateado entre os itens; fita sempre por metro usado
 - Documento do orcamento com espaco para **logo** (`public/logo.png`) e **QR code de WhatsApp** no rodape com mensagem pre-preenchida (nome do orcamento + valor total)
 - Impressao / PDF do orcamento pronto para o cliente (esconde ferramentas internas)
-- Altura e largura de gavetas configuraveis; gavetas no chao ou suspensas
+- Altura e largura de gavetas configuraveis; gavetas no chao, coluna suspensa ou caixote suspenso sob o tampo da mesa
 - Saia com altura configuravel em todas as mesas
 - Identificacao por cor e codigo no plano de corte
 - Sentido do veio (livre, comprimento ou largura)

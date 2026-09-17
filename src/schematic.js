@@ -200,8 +200,14 @@ function drawerFrontHeight(p, zoneMm, count) {
 function deskDrawerStack(p, ox, oy, dw, dh, topH, legW, legHmm, legHpx, scale, color) {
   const count = Math.max(1, Math.floor(n(p.gavetas, 1)))
   const elevated = p.drawerBase === 'alto'
-  const gapMm = elevated ? Math.min(Math.max(0, legHmm - 120), Math.max(40, n(p.baseH, 120))) : 0
-  const bodyHmm = Math.max(120, legHmm - gapMm)
+  const caixote = p.drawerBase === 'caixote'
+  const gapMm = elevated || caixote ? Math.min(Math.max(0, legHmm - 120), Math.max(40, n(p.baseH, 120))) : 0
+  let bodyHmm = Math.max(120, legHmm - gapMm)
+  if (caixote) {
+    const want = Math.round(n(p.suspH, 0))
+    const auto = Math.min(legHmm - 150, 460)
+    bodyHmm = Math.max(120, Math.min(legHmm - 60, want > 0 ? want : auto))
+  }
   const bodyPx = Math.max(6, Math.min(legHpx, bodyHmm * scale))
   const wantCol = Number(p.pedW) || 0
   const colMax = Math.max(40, dw - 2 * legW - 6)
@@ -309,7 +315,8 @@ function schematicLDesk3D(item) {
   const side = (item.variant || '').indexOf('dir') >= 0 ? 'right' : 'left'
   const gavetas = Math.max(0, Math.floor(n(p.gavetas, 0)))
   const elevated = p.drawerBase === 'alto'
-  const gapMm = gavetas && elevated ? Math.min(Math.max(0, tableH - thk - 120), Math.max(40, n(p.baseH, 120))) : 0
+  const caixote = p.drawerBase === 'caixote'
+  const gapMm = gavetas && (elevated || caixote) ? Math.min(Math.max(0, tableH - thk - 120), Math.max(40, n(p.baseH, 120))) : 0
 
   const main = side === 'right' ? { px0: 0, px1: W, pz0: 0, pz1: D } : { px0: rL, px1: rL + W, pz0: 0, pz1: D }
   const ret = side === 'right' ? { px0: W, px1: W + rL, pz0: D - rD, pz1: D } : { px0: 0, px1: rL, pz0: D - rD, pz1: D }
@@ -370,7 +377,14 @@ function schematicLDesk3D(item) {
     const colDepth = Math.max(120, rD - 100)
     const c0z = ret.pz1 - 60 - colDepth
     const c1z = ret.pz1 - 60
-    g += box(c0x, c0z, c1x, c1z, gapMm, tableH - thk, shade(color, -6))
+    let boxBot = gapMm
+    if (caixote) {
+      const want = Math.round(n(p.suspH, 0))
+      const auto = Math.min(tableH - thk - 150, 460)
+      const bodyH = Math.max(120, Math.min(tableH - thk - 60, want > 0 ? want : auto))
+      boxBot = Math.max(0, tableH - thk - bodyH)
+    }
+    g += box(c0x, c0z, c1x, c1z, boxBot, tableH - thk, shade(color, -6))
   }
 
   const drawLeaf = (leaf, fill, tag) => {
