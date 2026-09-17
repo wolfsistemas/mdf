@@ -53,7 +53,7 @@ function fits(W, H, w, h) {
 }
 
 function occupy(size, kerf, remaining) {
-  return Math.min(remaining, size + kerf)
+  return size + kerf
 }
 
 function computeGuillotine(board, item, kerf) {
@@ -61,7 +61,7 @@ function computeGuillotine(board, item, kerf) {
   let best = null
   for (const strip of board.strips) {
     for (const o of orients) {
-      if (o.h <= strip.height + 1e-6 && o.w <= strip.remaining + 1e-6) {
+      if (o.h <= strip.height - kerf + 1e-6 && o.w <= strip.remaining + 1e-6) {
         const used = occupy(o.w, kerf, strip.remaining)
         const cost = strip.remaining - used
         if (!best || cost < best.cost) best = { kind: 'strip', strip, o, cost }
@@ -110,7 +110,7 @@ function placeGuillotine(board, item, kerf) {
   return true
 }
 
-function splitFree(free, used) {
+function splitFree(free, used, kerf) {
   const result = []
   for (const f of free) {
     if (
@@ -123,7 +123,8 @@ function splitFree(free, used) {
       continue
     }
     if (used.x > f.x) {
-      result.push({ x: f.x, y: f.y, w: used.x - f.x, h: f.h })
+      const w = used.x - kerf - f.x
+      if (w > 1e-6) result.push({ x: f.x, y: f.y, w, h: f.h })
     }
     if (used.x + used.w < f.x + f.w) {
       result.push({
@@ -134,7 +135,8 @@ function splitFree(free, used) {
       })
     }
     if (used.y > f.y) {
-      result.push({ x: f.x, y: f.y, w: f.w, h: used.y - f.y })
+      const hh = used.y - kerf - f.y
+      if (hh > 1e-6) result.push({ x: f.x, y: f.y, w: f.w, h: hh })
     }
     if (used.y + used.h < f.y + f.h) {
       result.push({
@@ -192,7 +194,7 @@ function placeFree(board, item, kerf) {
 
   if (!best) return false
   const { f, o, ow, oh } = best
-  board.free = splitFree(board.free, { x: f.x, y: f.y, w: ow, h: oh })
+  board.free = splitFree(board.free, { x: f.x, y: f.y, w: ow, h: oh }, kerf)
   board.placements.push(placeRecord(item, o, f.x, f.y))
   return true
 }
@@ -245,7 +247,7 @@ function rebuildFree(board, kerf) {
   for (const p of board.placements) {
     const ow = occupy(p.w, kerf, board.W - p.x)
     const oh = occupy(p.h, kerf, board.H - p.y)
-    board.free = splitFree(board.free, { x: p.x, y: p.y, w: ow, h: oh })
+    board.free = splitFree(board.free, { x: p.x, y: p.y, w: ow, h: oh }, kerf)
   }
 }
 
@@ -337,7 +339,7 @@ function placeTight(board, item, kerf) {
     }
   }
   if (!best) return false
-  board.free = splitFree(board.free, { x: best.f.x, y: best.f.y, w: best.ow, h: best.oh })
+  board.free = splitFree(board.free, { x: best.f.x, y: best.f.y, w: best.ow, h: best.oh }, kerf)
   board.placements.push(placeRecord(item, best.o, best.f.x, best.f.y))
   return true
 }
