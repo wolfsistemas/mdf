@@ -142,6 +142,26 @@ function packPdf(blob, filename) {
   return { blob, filename, file }
 }
 
+export async function exportPlanPng(el, project) {
+  if (!el) throw new Error('plano')
+  el.classList.add('png-capture')
+  let canvas
+  try {
+    canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    })
+  } finally {
+    el.classList.remove('png-capture')
+  }
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('png'))), 'image/png')
+  })
+  download(blob, slug(project && project.name) + '-plano.png')
+}
+
 export function quoteFilename(name) {
   return slug(name) + '-orcamento.pdf'
 }

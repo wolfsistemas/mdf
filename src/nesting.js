@@ -286,6 +286,12 @@ export function nest(pieces, settings) {
   }
 
   const sheetArea = sheetW * sheetH
+  for (const board of boards) {
+    const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
+    ordered.forEach((p, i) => {
+      p.order = i + 1
+    })
+  }
   const mapped = boards.map((board, index) => {
     const used = board.placements.reduce((s, p) => s + p.w * p.h, 0)
     const usable = W * H
@@ -322,6 +328,21 @@ export function nest(pieces, settings) {
     efficiency: totalUsable > 0 ? (totalUsed / totalUsable) * 100 : 0,
     wasteArea: Math.max(0, totalUsable - totalUsed)
   }
+}
+
+export function cutSequence(board) {
+  const rows = []
+  const ordered = [...(board.placements || [])].sort((a, b) => a.y - b.y || a.x - b.x)
+  for (const p of ordered) {
+    let row = rows.find((r) => Math.abs(r.y - p.y) < 0.5)
+    if (!row) {
+      row = { y: p.y, height: 0, pieces: [] }
+      rows.push(row)
+    }
+    row.pieces.push(p)
+    row.height = Math.max(row.height, p.h)
+  }
+  return rows
 }
 
 export function summarize(project, settings, layout, pieces) {

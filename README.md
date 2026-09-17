@@ -39,12 +39,15 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Saia com altura configuravel em todas as mesas
 - Identificacao por cor e codigo no plano de corte
 - Sentido do veio (livre, comprimento ou largura)
-- Fita de borda por lado
+- Fita de borda por lado (fitamento padrao, frente, laterais, perimetro...)
+- Tamponamento de faces aparentes (laterais, topo e base; painel inteiro ou sarrafo) e reforco de tampo de mesa
+- Gaveteiro suspenso com fechadura configuravel
 - Plano de corte 2D: serra/guilhotina ou nesting livre
+- Numeracao e sequencia de corte por chapa (faixas) e exportacao do plano em PNG
 - Kerf (perda da serra) e refilo
 - Chapa padrao 2750 x 1830 mm, espessura padrao 15 mm
 - Custo de chapas + fita + mao de obra (percentual)
-- Exportar CSV das pecas e PDF interno do plano + custos
+- Exportar CSV das pecas, planilha CorteCloud e PDF interno do plano + custos
 
 ## Medidas
 

@@ -407,6 +407,55 @@ td select {
   font-size: 10px;
 }
 
+.piece-order {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.cut-sequence {
+  background: var(--card, #1a1613);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: -4px 0 18px;
+  font-size: 12px;
+}
+
+.cut-sequence h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.cut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px 0;
+  border-top: 1px dashed var(--line);
+  color: var(--muted);
+}
+
+.cut-row b {
+  color: var(--text, #f2ece4);
+  min-width: 96px;
+}
+
+.png-capture {
+  background: #fff !important;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

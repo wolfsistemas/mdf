@@ -15,8 +15,8 @@ import {
   formatMeters,
   formatMm
 } from './store.js'
-import { nest, summarize, edgeMeters, pieceAreaM2 } from './nesting.js'
-import { exportCsv, exportCorteCloud, exportPdf, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
+import { nest, summarize, cutSequence, edgeMeters, pieceAreaM2 } from './nesting.js'
+import { exportCsv, exportCorteCloud, exportPdf, exportPlanPng, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
 import {
   CATALOG_GROUPS,
   modelMeta,
@@ -2543,8 +2543,30 @@ function tabCorte() {
     summary,
     h(
       'div',
-      { class: 'sheet-wrap' },
-      layout.boards.length ? layout.boards.map((board) => sheetEl(board)) : [h('p', { class: 'help' }, ['Nenhuma chapa gerada.'])]
+      { class: 'sheet-wrap', id: 'plan-sheets' },
+      layout.boards.length
+        ? layout.boards.flatMap((board) => [sheetEl(board), sequenceEl(board)])
+        : [h('p', { class: 'help' }, ['Nenhuma chapa gerada.'])]
+    )
+  ])
+}
+
+function sequenceEl(board) {
+  const rows = cutSequence(board)
+  if (!rows.length) return null
+  return h('div', { class: 'cut-sequence' }, [
+    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'free' ? 'livre' : 'serra / guilhotina'})`]),
+    ...rows.map((row, i) =>
+      h('div', { class: 'cut-row' }, [
+        h('b', {}, [`Faixa ${i + 1} · ${Math.round(row.height)} mm`]),
+        h(
+          'span',
+          {},
+          row.pieces
+            .map((p) => `${p.order}. [${p.furnitureCode || '?'}] ${p.name} ${Math.round(p.w)}×${Math.round(p.h)}${p.rotated ? ' ↻' : ''}`)
+            .join('  ·  ')
+        )
+      ])
     )
   ])
 }
@@ -2585,6 +2607,7 @@ function sheetEl(board) {
         ].join(';')
       },
       [
+        h('i', { class: 'piece-order' }, [String(p.order || '')]),
         h('b', {}, [[`[${p.furnitureCode || '?'}] `, p.name, p.rotated ? ' ↻' : '']]),
         h('span', {}, [`${Math.round(p.w)} × ${Math.round(p.h)} mm`])
       ]
@@ -2798,7 +2821,10 @@ function topActions(p) {
       h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano'])
     )
   } else if (tab === 'corte') {
-    btns.unshift(h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano']))
+    btns.unshift(
+      h('button', { class: 'btn', title: 'Baixar o plano de corte em imagem PNG', onClick: async () => { try { await exportPlanPng(document.getElementById('plan-sheets'), p) } catch { alert('Não foi possível gerar o PNG do plano.') } } }, ['PNG plano']),
+      h('button', { class: 'btn', title: 'PDF interno com plano de corte', onClick: () => exportPdf(p, state.settings, layoutCache, summaryCache, piecesCache) }, ['PDF plano'])
+    )
   }
   return btns
 }
