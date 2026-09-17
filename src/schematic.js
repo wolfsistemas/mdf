@@ -49,13 +49,15 @@ function schematicFront(item, meta) {
   const dimH = isShelf ? D : H
   const vbW = 420
   const vbH = 300
-  const padL = 58
+  const heightLabel = isShelf ? `${Math.round(D)}` : `${Math.round(isDesk ? n(p.height, 750) : H)}`
+  const padL = Math.max(58, Math.ceil((heightLabel.length + 3) * 6.5) + 28)
   const padT = 28
   const padR = 24
-  const padB = 46
+  const padB = 52
   const boxW = vbW - padL - padR
   const boxH = vbH - padT - padB
-  const scale = Math.min(boxW / W, boxH / dimH)
+  const fit = 0.96
+  const scale = fit * Math.min(boxW / W, boxH / dimH)
   const dw = W * scale
   const dh = dimH * scale
   const ox = padL + (boxW - dw) / 2
@@ -170,7 +172,6 @@ function schematicFront(item, meta) {
     }
   }
 
-  const heightLabel = isShelf ? `${Math.round(D)}` : `${Math.round(isDesk ? n(p.height, 750) : H)}`
   const widthLabel = `${Math.round(W)}`
   const extra =
     isDesk || isShelf
@@ -236,16 +237,18 @@ function schematicLDesk(item) {
   const rL = Math.max(1, n(p.retLen, 800))
   const rD = Math.max(1, n(p.retDepth, 500))
   const side = (item.variant || '').indexOf('dir') >= 0 ? 'right' : 'left'
+  const vLabel = `${Math.round(D + rD)} mm`
 
   const vbW = 420
   const vbH = 300
-  const padL = 30
+  const padL = Math.max(30, Math.ceil(vLabel.length * 6.5) + 28)
   const padT = 30
   const padR = 40
   const padB = 50
   const boxW = vbW - padL - padR
   const boxH = vbH - padT - padB
-  const scale = Math.min(boxW / (W + rL), boxH / (D + rD))
+  const fit = 0.96
+  const scale = fit * Math.min(boxW / (W + rL), boxH / (D + rD))
   const mainW = W * scale
   const mainD = D * scale
   const retW = rL * scale
