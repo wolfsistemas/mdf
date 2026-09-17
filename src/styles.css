@@ -407,6 +407,12 @@ td select {
   font-size: 10px;
 }
 
+.piece-box.piece-fill {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.7);
+  opacity: 0.88;
+}
+
 .piece-order {
   position: absolute;
   top: 2px;

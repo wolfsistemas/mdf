@@ -2551,6 +2551,9 @@ function tabCorte() {
         : 'Adicione móveis para gerar o nesting.'
     ]),
     legend(),
+    layout.boards.some((b) => b.placements.some((p) => p.hidden))
+      ? h('p', { class: 'help' }, ['Tracejado = aproveitamento (fundos, caixotes e tamponamento): sem veio, entram por ultimo nas sobras da chapa.'])
+      : null,
     layout.unplaced.length
       ? h('p', { class: 'unplaced' }, [
           `${layout.unplaced.length} peça(s) não cabem na chapa: ${layout.unplaced.map((x) => `[${x.furnitureCode}] ${x.name}`).join(', ')}`
@@ -2616,7 +2619,8 @@ function sheetEl(board) {
     const box = h(
       'div',
       {
-        class: 'piece-box',
+        class: 'piece-box' + (p.hidden ? ' piece-fill' : ''),
+        title: p.hidden ? 'Aproveitamento (peça oculta — pode girar e usar sobras)' : '',
         style: [
           `left:${(board.trim + p.x) * scale}px`,
           `top:${(board.trim + p.y) * scale}px`,

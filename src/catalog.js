@@ -1,7 +1,7 @@
 const uid = () =>
   Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)
 
-function makePiece(name, length, width, thickness, qty, grain, edges) {
+function makePiece(name, length, width, thickness, qty, grain, edges, hidden) {
   return {
     id: uid(),
     name,
@@ -11,6 +11,7 @@ function makePiece(name, length, width, thickness, qty, grain, edges) {
     qty,
     grain,
     edges: edges || { front: false, back: false, left: false, right: false },
+    hidden: !!hidden,
     notes: ''
   }
 }
@@ -544,10 +545,10 @@ function edges(front, back, left, right) {
   return { front: !!front, back: !!back, left: !!left, right: !!right }
 }
 
-function part(name, length, width, thickness, qty, grain, edge) {
+function part(name, length, width, thickness, qty, grain, edge, hidden) {
   const q = nint(qty, 0)
   if (q <= 0 || mm(length) <= 0 || mm(width) <= 0) return null
-  return makePiece(name, mm(length), mm(width), mm(thickness), q, grain, edge)
+  return makePiece(name, mm(length), mm(width), mm(thickness), q, grain, edge, hidden)
 }
 
 function push(list, item) {
@@ -575,7 +576,7 @@ function carcass(W, H, D, t, backT, hasBack, shelves, divisors) {
     push(out, part('Divisor', innerH, D, t, nDiv, 'comprimento', lEdge))
   }
   if (hasBack) {
-    push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false)))
+    push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false), true))
   }
   if (nShelf) {
     push(out, part('Prateleira', bayW, shelfD, t, nShelf * bays, 'comprimento', edges(true, false, false, false)))
@@ -612,9 +613,9 @@ function drawerInternal(p, frontH, name) {
   const boxW = Math.max(80, frontW - 30)
   const boxD = Math.max(80, Number(p.boxD) || 300)
   return [
-    part(name + ' — lateral', boxD, boxH, 15, 2, 'comprimento', edges(false, false, true, false)),
-    part(name + ' — fundo', boxW, boxD, 15, 1, 'livre', edges(false, false, false, false)),
-    part(name + ' — base', boxW, boxH, 15, 1, 'livre', edges(false, false, false, false))
+    part(name + ' — lateral', boxD, boxH, 15, 2, 'comprimento', edges(false, false, true, false), true),
+    part(name + ' — fundo', boxW, boxD, 15, 1, 'livre', edges(false, false, false, false), true),
+    part(name + ' — base', boxW, boxH, 15, 1, 'livre', edges(false, false, false, false), true)
   ].filter(Boolean)
 }
 
@@ -641,7 +642,7 @@ function buildBox(item, opts) {
   push(out, part('Base', innerW, D, t, 1, 'comprimento', fEdge))
   push(out, part('Tampo', innerW, D, t, 1, 'comprimento', fEdge))
   if (divisors) push(out, part('Divisor', innerH, D, t, divisors, 'comprimento', lEdge))
-  if (hasBack) push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false)))
+  if (hasBack) push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false), true))
 
   const drawerZoneH = gavetas > 0 ? Math.max(zoneH, 180) : 0
   const doorZoneH = H - drawerZoneH
@@ -699,7 +700,7 @@ function buildGaveteiro(item) {
   push(out, part('Lateral', H, D, t, 2, 'comprimento', lEdge))
   push(out, part('Base', innerW, D, t, 1, 'comprimento', fEdge))
   push(out, part('Tampo', innerW, D, t, 1, 'comprimento', fEdge))
-  push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false)))
+  push(out, part('Fundo', innerW, innerH, backT, 1, 'livre', edges(false, false, false, false), true))
   if (gavetas) {
     const gap = 3
     const frontH = drawerFront(p, H, gavetas, gap)
@@ -737,7 +738,7 @@ function deskPedestal(p, colW, colDepth, baseT = 15, frontT = 15) {
   push(out, part('Gaveteiro — base', colW, colDepth, baseT, 1, 'comprimento', fEdge))
   push(out, part('Gaveteiro — tampo', colW, colDepth, baseT, 1, 'comprimento', fEdge))
   if (caixote) {
-    push(out, part('Gaveteiro — fundo', Math.max(0, colW - 2 * baseT), Math.max(0, bodyH - 2 * baseT), 15, 1, 'livre', edges(false, false, false, false)))
+    push(out, part('Gaveteiro — fundo', Math.max(0, colW - 2 * baseT), Math.max(0, bodyH - 2 * baseT), 15, 1, 'livre', edges(false, false, false, false), true))
   }
   const faceH = drawerFront(p, bodyH, n)
   const faceW = Math.max(80, colW - 2)
@@ -935,23 +936,23 @@ function tamponamentoPieces(item) {
     const legH = Math.max(120, H - t)
     const modo = p.tamponamento || 'nenhum'
     if (modo === 'dobra') {
-      push(out, part('Reforço do tampo', W, D, Math.max(6, mm(num(p, 'tampoT', 25))), 1, 'comprimento', tEdge))
+      push(out, part('Reforço do tampo', W, D, Math.max(6, mm(num(p, 'tampoT', 25))), 1, 'comprimento', tEdge, true))
     } else if (BORDA_H[modo]) {
       const h = BORDA_H[modo]
-      push(out, part('Tamponamento borda — frente', W, h, t, 1, 'comprimento', tEdge))
-      push(out, part('Tamponamento borda — trás', W, h, t, 1, 'comprimento', tEdge))
-      push(out, part('Tamponamento borda — lateral', Math.max(0, D - 2 * t), h, t, 2, 'comprimento', tEdge))
+      push(out, part('Tamponamento borda — frente', W, h, t, 1, 'comprimento', tEdge, true))
+      push(out, part('Tamponamento borda — trás', W, h, t, 1, 'comprimento', tEdge, true))
+      push(out, part('Tamponamento borda — lateral', Math.max(0, D - 2 * t), h, t, 2, 'comprimento', tEdge, true))
       if (retLen > 0) {
-        push(out, part('Tamponamento borda retorno — frente', retLen, h, t, 1, 'comprimento', tEdge))
-        push(out, part('Tamponamento borda retorno — trás', retLen, h, t, 1, 'comprimento', tEdge))
-        push(out, part('Tamponamento borda retorno — ponta', Math.max(0, retDepth - 2 * t), h, t, 1, 'comprimento', tEdge))
+        push(out, part('Tamponamento borda retorno — frente', retLen, h, t, 1, 'comprimento', tEdge, true))
+        push(out, part('Tamponamento borda retorno — trás', retLen, h, t, 1, 'comprimento', tEdge, true))
+        push(out, part('Tamponamento borda retorno — ponta', Math.max(0, retDepth - 2 * t), h, t, 1, 'comprimento', tEdge, true))
       }
     }
     const modoP = p.tamponamentoPerna || 'nenhum'
     if (BORDA_H[modoP]) {
       const h = BORDA_H[modoP]
       const qty = p.pernas === 'pernas' ? (retLen > 0 ? 6 : 4) : retLen > 0 ? 3 : 2
-      push(out, part('Tamponamento borda — pé', legH, h, t, qty, 'comprimento', tEdge))
+      push(out, part('Tamponamento borda — pé', legH, h, t, qty, 'comprimento', tEdge, true))
     }
     return out
   }
@@ -965,11 +966,11 @@ function tamponamentoPieces(item) {
   const tipo = p.tampoTipo || 'total'
   const larg = tipo === 'sarrafo' ? Math.max(40, mm(num(p, 'tampoLarg', 100))) : D
   const lados = modo === 'laterais' || modo === 'tudo' ? 2 : 0
-  if (lados) push(out, part('Tamponamento lateral', H, larg, t, 2, 'comprimento', tEdge))
+  if (lados) push(out, part('Tamponamento lateral', H, larg, t, 2, 'comprimento', tEdge, true))
   if (modo === 'topo-base' || modo === 'tudo') {
     const tw = Math.max(0, W - lados * t)
-    push(out, part('Tamponamento tampo', tw, D, t, 1, 'comprimento', tEdge))
-    push(out, part('Tamponamento base', tw, D, t, 1, 'comprimento', tEdge))
+    push(out, part('Tamponamento tampo', tw, D, t, 1, 'comprimento', tEdge, true))
+    push(out, part('Tamponamento base', tw, D, t, 1, 'comprimento', tEdge, true))
   }
   return out
 }

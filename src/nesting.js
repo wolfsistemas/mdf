@@ -210,6 +210,7 @@ function placeRecord(item, o, x, y) {
     h: o.h,
     rotated: o.rotated,
     grain: item.grain,
+    hidden: !!item.hidden,
     thickness: item.thickness,
     furnitureId: item.furnitureId || '',
     furnitureName: item.furnitureName || '',
@@ -265,99 +266,135 @@ export function nest(pieces, settings) {
     return exact || any
   }
 
-  const items = expandPieces(pieces).sort((a, b) => {
+  const areaSort = (a, b) => {
     const aa = a.length * a.width
     const ba = b.length * b.width
     if (ba !== aa) return ba - aa
     return Math.max(b.length, b.width) - Math.max(a.length, a.width)
-  })
+  }
+  const fillSort = (a, b) => {
+    const ha = a.hidden ? 1 : 0
+    const hb = b.hidden ? 1 : 0
+    if (ha !== hb) return ha - hb
+    return areaSort(a, b)
+  }
 
-  const boards = []
-  const unplaced = []
-
-  for (const item of items) {
-    const pick = specForItem(item)
-    if (!pick) {
-      unplaced.push(item)
-      continue
-    }
-
-    let placed = false
-    if (mode === 'free') {
-      for (const board of boards) {
-        if (board.thickness !== item.thickness) continue
-        placed = placeFree(board, item, kerf)
-        if (placed) break
+  const pack = (items) => {
+    const boards = []
+    const unplaced = []
+    for (const item of items) {
+      const pick = specForItem(item)
+      if (!pick) {
+        unplaced.push(item)
+        continue
       }
-    } else {
-      let bestBoard = null
-      let bestCost = Infinity
-      for (const board of boards) {
-        if (board.thickness !== item.thickness) continue
-        const c = computeGuillotine(board, item, kerf)
-        if (c && c.cost < bestCost) {
-          bestCost = c.cost
-          bestBoard = board
+
+      let placed = false
+      if (mode === 'free') {
+        for (const board of boards) {
+          if (board.thickness !== item.thickness) continue
+          placed = placeFree(board, item, kerf)
+          if (placed) break
         }
+      } else {
+        let bestBoard = null
+        let bestCost = Infinity
+        for (const board of boards) {
+          if (board.thickness !== item.thickness) continue
+          const c = computeGuillotine(board, item, kerf)
+          if (c && c.cost < bestCost) {
+            bestCost = c.cost
+            bestBoard = board
+          }
+        }
+        if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
       }
-      if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
+      if (!placed) {
+        const board = newBoard(pick.sp.width - 2 * trim, pick.sp.height - 2 * trim, mode, item.thickness)
+        board.spec = pick.sp
+        placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
+        if (placed) boards.push(board)
+        else unplaced.push(item)
+      }
     }
-    if (!placed) {
-      const board = newBoard(pick.sp.width - 2 * trim, pick.sp.height - 2 * trim, mode, item.thickness)
-      board.spec = pick.sp
-      placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
-      if (placed) boards.push(board)
-      else unplaced.push(item)
+
+    for (const board of boards) {
+      const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
+      ordered.forEach((p, i) => {
+        p.order = i + 1
+      })
     }
+    return { boards, unplaced }
   }
 
-  for (const board of boards) {
-    const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
-    ordered.forEach((p, i) => {
-      p.order = i + 1
+  const finish = (boards, unplaced) => {
+    const mapped = boards.map((board, index) => {
+      const sp = board.spec
+      const W = sp.width - 2 * trim
+      const H = sp.height - 2 * trim
+      const used = board.placements.reduce((s, p) => s + p.w * p.h, 0)
+      const usable = W * H
+      return {
+        index: index + 1,
+        sheetWidth: sp.width,
+        sheetHeight: sp.height,
+        sheetName: sp.name,
+        sheetPrice: sp.price,
+        trim,
+        kerf,
+        packW: W,
+        packH: H,
+        thickness: board.thickness,
+        placements: board.placements,
+        usedArea: used,
+        usableArea: usable,
+        sheetArea: sp.width * sp.height,
+        wasteArea: Math.max(0, usable - used),
+        efficiency: usable > 0 ? (used / usable) * 100 : 0,
+        mode
+      }
     })
-  }
-  const mapped = boards.map((board, index) => {
-    const sp = board.spec
-    const W = sp.width - 2 * trim
-    const H = sp.height - 2 * trim
-    const used = board.placements.reduce((s, p) => s + p.w * p.h, 0)
-    const usable = W * H
+
+    const totalUsed = mapped.reduce((s, b) => s + b.usedArea, 0)
+    const totalSheet = mapped.reduce((s, b) => s + b.sheetArea, 0)
+    const totalUsable = mapped.reduce((s, b) => s + b.usableArea, 0)
+
     return {
-      index: index + 1,
-      sheetWidth: sp.width,
-      sheetHeight: sp.height,
-      sheetName: sp.name,
-      sheetPrice: sp.price,
-      trim,
-      kerf,
-      packW: W,
-      packH: H,
-      thickness: board.thickness,
-      placements: board.placements,
-      usedArea: used,
-      usableArea: usable,
-      sheetArea: sp.width * sp.height,
-      wasteArea: Math.max(0, usable - used),
-      efficiency: usable > 0 ? (used / usable) * 100 : 0,
-      mode
+      boards: mapped,
+      unplaced,
+      sheetsNeeded: mapped.length,
+      totalUsed,
+      totalSheet,
+      totalUsable,
+      efficiency: totalUsable > 0 ? (totalUsed / totalUsable) * 100 : 0,
+      wasteArea: Math.max(0, totalUsable - totalUsed)
     }
-  })
-
-  const totalUsed = mapped.reduce((s, b) => s + b.usedArea, 0)
-  const totalSheet = mapped.reduce((s, b) => s + b.sheetArea, 0)
-  const totalUsable = mapped.reduce((s, b) => s + b.usableArea, 0)
-
-  return {
-    boards: mapped,
-    unplaced,
-    sheetsNeeded: mapped.length,
-    totalUsed,
-    totalSheet,
-    totalUsable,
-    efficiency: totalUsable > 0 ? (totalUsed / totalUsable) * 100 : 0,
-    wasteArea: Math.max(0, totalUsable - totalUsed)
   }
+
+  const scoreOf = (res, pol) => [res.unplaced.length, res.sheetsNeeded, -res.efficiency, pol.fill ? 0 : 1]
+  const better = (a, b) => {
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return a[i] < b[i]
+    }
+    return false
+  }
+
+  const hasHidden = pieces.some((p) => p.hidden)
+  const canFree = pieces.some((p) => p.hidden && p.grain !== 'livre')
+  const policies = [{ free: false, fill: false }]
+  if (canFree) policies.push({ free: true, fill: false })
+  if (hasHidden) policies.push({ free: true, fill: true })
+
+  let best = null
+  for (const pol of policies) {
+    const transformed = pieces.map((p) => (pol.free && p.hidden ? { ...p, grain: 'livre' } : p))
+    const items = expandPieces(transformed).sort(pol.fill ? fillSort : areaSort)
+    const packed = pack(items)
+    const res = finish(packed.boards, packed.unplaced)
+    const score = scoreOf(res, pol)
+    if (!best || better(score, best.score)) best = { res, score }
+  }
+  return best.res
 }
 
 export function cutSequence(board) {
