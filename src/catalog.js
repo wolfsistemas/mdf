@@ -129,13 +129,28 @@ export const TAMPO_TIPO_OPTIONS = [
   ['sarrafo', 'Sarrafo (faixa)']
 ]
 
+export const MESA_BORDA_OPTIONS = [
+  ['nenhum', 'Nenhum'],
+  ['borda30', 'Borda 30 mm'],
+  ['borda50', 'Borda 50 mm'],
+  ['borda100', 'Borda 100 mm']
+]
+
+export const MESA_TAMPO_OPTIONS = [
+  ['nenhum', 'Nenhum'],
+  ['dobra', 'Dobrar (painel inteiro)'],
+  ['borda30', 'Borda 30 mm'],
+  ['borda50', 'Borda 50 mm'],
+  ['borda100', 'Borda 100 mm']
+]
+
+const BORDA_H = { borda30: 30, borda50: 50, borda100: 100 }
+
 function finishingFields(m) {
   if (m.type === 'mesa') {
     return [
-      sf('tamponamento', 'Tamponamento do tampo', [
-        ['nenhum', 'Nenhum'],
-        ['dobra', 'Dobrar (engrossar)']
-      ]),
+      sf('tamponamento', 'Tamponamento do tampo', MESA_TAMPO_OPTIONS),
+      sf('tamponamentoPerna', 'Tamponamento das laterais/pés', MESA_BORDA_OPTIONS),
       nf('tampoT', 'Esp. do reforço mm')
     ]
   }
@@ -152,7 +167,7 @@ function withFinishing(m) {
   if (m.type === 'avulso') return m
   return {
     ...m,
-    defaults: { ...m.defaults, fitamento: 'padrao', tamponamento: 'nenhum', tampoTipo: 'total', tampoT: 25, tampoLarg: 100 },
+    defaults: { ...m.defaults, fitamento: 'padrao', tamponamento: 'nenhum', tamponamentoPerna: 'nenhum', tampoTipo: 'total', tampoT: 25, tampoLarg: 100 },
     fields: [
       ...(m.fields || []),
       ...finishingFields(m),
@@ -909,18 +924,44 @@ const TAMPONAMENTO_TYPES = new Set(['armario', 'guarda-roupa', 'gaveteiro', 'nic
 
 function tamponamentoPieces(item) {
   const p = item.params || {}
+  const out = []
+  if (item.type === 'mesa') {
+    const W = mm(num(p, 'width', 1400))
+    const D = mm(num(p, 'depth', 600))
+    const H = mm(num(p, 'height', 750))
+    const t = Math.max(6, mm(num(p, 'thickness', 15)))
+    const retLen = mm(num(p, 'retLen', 0))
+    const retDepth = Math.max(120, mm(num(p, 'retDepth', retLen > 0 ? 600 : 0)))
+    const legH = Math.max(120, H - t)
+    const modo = p.tamponamento || 'nenhum'
+    if (modo === 'dobra') {
+      push(out, part('Reforço do tampo', W, D, Math.max(6, mm(num(p, 'tampoT', 25))), 1, 'comprimento', tEdge))
+    } else if (BORDA_H[modo]) {
+      const h = BORDA_H[modo]
+      push(out, part('Tamponamento borda — frente', W, h, t, 1, 'comprimento', tEdge))
+      push(out, part('Tamponamento borda — trás', W, h, t, 1, 'comprimento', tEdge))
+      push(out, part('Tamponamento borda — lateral', Math.max(0, D - 2 * t), h, t, 2, 'comprimento', tEdge))
+      if (retLen > 0) {
+        push(out, part('Tamponamento borda retorno — frente', retLen, h, t, 1, 'comprimento', tEdge))
+        push(out, part('Tamponamento borda retorno — trás', retLen, h, t, 1, 'comprimento', tEdge))
+        push(out, part('Tamponamento borda retorno — ponta', Math.max(0, retDepth - 2 * t), h, t, 1, 'comprimento', tEdge))
+      }
+    }
+    const modoP = p.tamponamentoPerna || 'nenhum'
+    if (BORDA_H[modoP]) {
+      const h = BORDA_H[modoP]
+      const qty = p.pernas === 'pernas' ? (retLen > 0 ? 6 : 4) : retLen > 0 ? 3 : 2
+      push(out, part('Tamponamento borda — pé', legH, h, t, qty, 'comprimento', tEdge))
+    }
+    return out
+  }
   const modo = p.tamponamento || 'nenhum'
-  if (modo === 'nenhum') return []
+  if (modo === 'nenhum') return out
   const W = mm(num(p, 'width', 800))
   const H = mm(num(p, 'height', 1800))
   const D = mm(num(p, 'depth', 500))
   const t = Math.max(6, mm(num(p, 'tampoT', 25)))
-  const out = []
-  if (item.type === 'mesa') {
-    push(out, part('Reforço do tampo', W, D, t, 1, 'comprimento', tEdge))
-    return out
-  }
-  if (!TAMPONAMENTO_TYPES.has(item.type)) return []
+  if (!TAMPONAMENTO_TYPES.has(item.type)) return out
   const tipo = p.tampoTipo || 'total'
   const larg = tipo === 'sarrafo' ? Math.max(40, mm(num(p, 'tampoLarg', 100))) : D
   const lados = modo === 'laterais' || modo === 'tudo' ? 2 : 0
@@ -977,7 +1018,9 @@ export function furnitureSummaryLine(item) {
     if (p.pe && p.pe !== 'nenhum') bits.push(PE_LABEL[p.pe] || p.pe)
     if (p.puxador && p.puxador !== 'nenhum') bits.push(PUXADOR_LABEL[p.puxador] || p.puxador)
     if (p.fitamento && p.fitamento !== 'padrao') bits.push(`fita: ${FITAMENTO_LABEL[p.fitamento] || p.fitamento}`)
-    if (p.tamponamento && p.tamponamento !== 'nenhum') bits.push('tampo engrossado')
+    if (p.tamponamento === 'dobra') bits.push('tampo engrossado')
+    else if (BORDA_H[p.tamponamento]) bits.push(`borda ${BORDA_H[p.tamponamento]} mm`)
+    if (BORDA_H[p.tamponamentoPerna]) bits.push(`borda lateral ${BORDA_H[p.tamponamentoPerna]} mm`)
     return bits.join(' · ')
   }
   const bits = [`${mm(p.width)} × ${mm(p.height || 0)} × ${mm(p.depth)} mm`]

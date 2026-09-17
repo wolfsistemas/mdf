@@ -2137,6 +2137,7 @@ function isParamHidden(item, f) {
   if (f.key === 'frontT') return noDrawers
   if (f.key === 'doorT') return noDoors && noDrawers
   if (f.key === 'backT') return !Number(p.hasBack ?? 1)
+  if (f.key === 'tampoT' && item.type === 'mesa') return (p.tamponamento || 'nenhum') !== 'dobra'
   const peOff = item.variant === 'aereo' || item.variant === 'espelheira' || item.variant === 'forno' || String(item.variant || '').startsWith('suspenso')
   const pe = p.pe || 'nenhum'
   if (f.key === 'pe' || f.key === 'peH' || f.key === 'peQty') {

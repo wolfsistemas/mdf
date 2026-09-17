@@ -40,7 +40,8 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Identificacao por cor e codigo no plano de corte
 - Sentido do veio (livre, comprimento ou largura)
 - Fita de borda por lado (fitamento padrao, frente, laterais, perimetro...)
-- Tamponamento de faces aparentes (laterais, topo e base; painel inteiro ou sarrafo) e reforco de tampo de mesa
+- Tamponamento de faces aparentes (laterais, topo e base; painel inteiro ou sarrafo)
+- Tamponamento de tampo de mesa: reforco (dobrar/engrossar o tampo) ou borda de 30/50/100 mm, no tampo e nas laterais/pes
 - Gaveteiro suspenso com fechadura configuravel
 - Plano de corte 2D: serra/guilhotina ou nesting livre
 - Numeracao e sequencia de corte por chapa (faixas) e exportacao do plano em PNG
