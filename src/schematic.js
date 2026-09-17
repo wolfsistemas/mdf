@@ -243,7 +243,9 @@ function schematicLDesk(item) {
   const rL = Math.max(1, n(p.retLen, 800))
   const rD = Math.max(1, n(p.retDepth, 500))
   const side = (item.variant || '').indexOf('dir') >= 0 ? 'right' : 'left'
-  const vLabel = `${Math.round(D + rD)} mm`
+  const worldW = W + rD
+  const worldH = Math.max(D, rL)
+  const vLabel = `${Math.round(worldH)} mm`
 
   const vbW = 420
   const vbH = 300
@@ -254,31 +256,29 @@ function schematicLDesk(item) {
   const boxW = vbW - padL - padR
   const boxH = vbH - padT - padB
   const fit = 0.96
-  const scale = fit * Math.min(boxW / (W + rL), boxH / (D + rD))
+  const scale = fit * Math.min(boxW / worldW, boxH / worldH)
   const mainW = W * scale
   const mainD = D * scale
-  const retW = rL * scale
-  const retD = rD * scale
+  const armW = rD * scale
+  const armL = rL * scale
 
   let mw, mh, ox, oy, rx, ry, rw, rh
+  mw = mainW
+  mh = mainD
   if (side === 'right') {
-    mw = mainW
-    mh = mainD
     ox = padL
     oy = padT
     rx = ox + mw
-    ry = oy + (mh - retD)
-    rw = retW
-    rh = retD
+    ry = oy
+    rw = armW
+    rh = armL
   } else {
-    mw = mainW
-    mh = mainD
-    ox = padL + retW
+    rx = padL
+    ry = padT
+    rw = armW
+    rh = armL
+    ox = padL + armW
     oy = padT
-    rx = ox - retW
-    ry = oy + (mh - retD)
-    rw = retW
-    rh = retD
   }
 
   const fillMain = `<rect x="${ox}" y="${oy}" width="${mw}" height="${mh}" fill="${color}" />`
@@ -293,9 +293,9 @@ function schematicLDesk(item) {
       <rect x="0" y="0" width="${vbW}" height="${vbH}" fill="#1a1612" rx="12" />
       ${fillRet}
       ${fillMain}
-      ${dim(totalX, totalY + totalH + 16, totalX + totalW, totalY + totalH + 16, `${Math.round(W + (side === 'right' ? rL : rL))} mm`, 'h')}
-      ${dim(totalX - 14, totalY, totalX - 14, totalY + totalH, `${Math.round(D + rD)} mm`, 'v')}
-      <text x="${(totalX + totalW) / 2}" y="${totalY + totalH + 32}" text-anchor="middle" class="muted">vista superior · retorno ${side === 'right' ? 'direito' : 'esquerdo'} (${Math.round(rL)} mm)${n(p.gavetas, 0) > 0 ? ' · col. de gavetas' : ''}</text>
+      ${dim(totalX, totalY + totalH + 16, totalX + totalW, totalY + totalH + 16, `${Math.round(worldW)} mm`, 'h')}
+      ${dim(totalX - 14, totalY, totalX - 14, totalY + totalH, `${Math.round(worldH)} mm`, 'v')}
+      <text x="${(totalX + totalW) / 2}" y="${totalY + totalH + 32}" text-anchor="middle" class="muted">vista superior · retorno ${side === 'right' ? 'direito' : 'esquerdo'} (${Math.round(rL)} × ${Math.round(rD)} mm)${n(p.gavetas, 0) > 0 ? ' · col. de gavetas' : ''}</text>
     </svg>
   `
 }
@@ -318,8 +318,11 @@ function schematicLDesk3D(item) {
   const caixote = p.drawerBase === 'caixote'
   const gapMm = gavetas && (elevated || caixote) ? Math.min(Math.max(0, tableH - thk - 120), Math.max(40, n(p.baseH, 120))) : 0
 
-  const main = side === 'right' ? { px0: 0, px1: W, pz0: 0, pz1: D } : { px0: rL, px1: rL + W, pz0: 0, pz1: D }
-  const ret = side === 'right' ? { px0: W, px1: W + rL, pz0: D - rD, pz1: D } : { px0: 0, px1: rL, pz0: D - rD, pz1: D }
+  const main = { px0: 0, px1: W, pz0: 0, pz1: D }
+  const ret =
+    side === 'right'
+      ? { px0: W, px1: W + rD, pz0: 0, pz1: rL }
+      : { px0: -rD, px1: 0, pz0: 0, pz1: rL }
   const leaves = [main, ret]
 
   const vbW = 420
@@ -353,8 +356,8 @@ function schematicLDesk3D(item) {
   let g = ''
 
   const silhouettePts = side === 'right'
-    ? [[0, 0], [W, 0], [W, D - rD], [W + rL, D - rD], [W + rL, D], [0, D]]
-    : [[rL + W, 0], [rL + W, D], [0, D], [0, D - rD], [rL, D - rD], [rL, 0]]
+    ? [[0, 0], [W + rD, 0], [W + rD, rL], [W, rL], [W, D], [0, D]]
+    : [[-rD, 0], [W, 0], [W, D], [0, D], [0, rL], [-rD, rL]]
 
   const shadow = silhouettePts.map(([px, pz]) => P(px, pz, 0))
   g += `<polygon points="${poly(shadow)}" fill="#000" opacity="0.16" />`
@@ -371,10 +374,10 @@ function schematicLDesk3D(item) {
   }
 
   if (gavetas) {
-    const colW = Math.min(rL - 40, Math.max(260, Number(p.pedW) || Math.min(620, rL - 120)))
-    const c0x = main.px1 + (rL - colW) / 2
+    const colW = Math.min(rD - 40, Math.max(120, Number(p.pedW) || Math.min(620, rD - 120)))
+    const c0x = ret.px0 + (rD - colW) / 2
     const c1x = c0x + colW
-    const colDepth = Math.max(120, rD - 100)
+    const colDepth = Math.max(120, Math.min(rL - 80, 500))
     const c0z = ret.pz1 - 60 - colDepth
     const c1z = ret.pz1 - 60
     let boxBot = gapMm
@@ -460,8 +463,9 @@ function schematicLDesk3D(item) {
   silTop.push(silTop[0])
   g += `<polyline points="${poly(silTop)}" fill="none" stroke="${shade(color, -44)}" stroke-width="1.6" opacity="0.9" />`
 
-  const dLabel = Math.round(side === 'right' ? W + rL : rL + W)
-  const label = `perspectiva · retorno ${side === 'right' ? 'à direita' : 'à esquerda'} (${Math.round(rL)} × ${Math.round(rD)} mm) · ${dLabel} × ${Math.round(D)} mm · alt. ${Math.round(tableH)} mm${gavetas ? ' · com gaveteiro' : ''}`
+  const footprintW = Math.round(W + rD)
+  const footprintD = Math.round(Math.max(D, rL))
+  const label = `perspectiva · retorno ${side === 'right' ? 'à direita' : 'à esquerda'} (${Math.round(rL)} × ${Math.round(rD)} mm) · ${footprintW} × ${footprintD} mm · alt. ${Math.round(tableH)} mm${gavetas ? ' · com gaveteiro' : ''}`
 
   return `
     <svg viewBox="0 0 ${vbW} ${vbH}" class="schematic-svg" aria-hidden="true">
