@@ -413,6 +413,40 @@ td select {
   opacity: 0.88;
 }
 
+.piece-box.piece-manual {
+  outline: 2px solid rgba(214, 178, 90, 0.95);
+  outline-offset: -2px;
+}
+
+.piece-manual .piece-order {
+  background: rgba(214, 178, 90, 0.95);
+  color: #1a1a1a;
+}
+
+.piece-rotate {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.piece-rotate:hover {
+  background: rgba(214, 178, 90, 0.95);
+  color: #1a1a1a;
+}
+
 .piece-box.piece-drag {
   cursor: grab;
   touch-action: none;

@@ -52,7 +52,7 @@ function fits(W, H, w, h) {
   return w <= W + 1e-6 && h <= H + 1e-6
 }
 
-function occupy(size, kerf, remaining) {
+function occupy(size, kerf, _remaining) {
   return size + kerf
 }
 
@@ -453,20 +453,23 @@ export function applyManualMoves(layout, moves) {
   for (const board of layout.boards) {
     const moved = board.placements.filter((q) => moves[q.uid])
     if (!moved.length) continue
-    const settled = board.placements
-      .filter((q) => !moves[q.uid])
-      .map((q) => ({ x: q.x, y: q.y, w: q.w, h: q.h }))
+    const occ = board.placements.map((q) => ({ uid: q.uid, x: q.x, y: q.y, w: q.w, h: q.h }))
     for (const piece of moved) {
       const cand = manualCandidate(piece, moves[piece.uid])
       if (!Number.isFinite(cand.x) || !Number.isFinite(cand.y)) continue
-      if (!placementFits(board, cand)) continue
-      if (settled.some((q) => overlapGap(cand, q, board.kerf))) continue
+      const at = occ.findIndex((q) => q.uid === piece.uid)
+      const original = occ[at]
+      occ.splice(at, 1)
+      if (!placementFits(board, cand) || occ.some((q) => overlapGap(cand, q, board.kerf))) {
+        occ.push(original)
+        continue
+      }
+      occ.push({ uid: piece.uid, x: cand.x, y: cand.y, w: cand.w, h: cand.h })
       piece.x = cand.x
       piece.y = cand.y
       piece.rotated = cand.rotated
       piece.w = cand.w
       piece.h = cand.h
-      settled.push(cand)
     }
   }
   return layout

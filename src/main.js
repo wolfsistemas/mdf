@@ -2669,13 +2669,53 @@ function clearManual() {
   render()
 }
 
+function canRotatePiece(piece) {
+  return !!piece.hidden || piece.grain === 'livre'
+}
+
+function rotateManual(board, piece) {
+  if (!canRotatePiece(piece)) {
+    showToast('Esta peça tem veio definido: não pode girar.', 'info', 4000)
+    return
+  }
+  const next = !piece.rotated
+  const length = Number(piece.length) || piece.w
+  const width = Number(piece.width) || piece.h
+  const w = next ? width : length
+  const h = next ? length : width
+  if (w > board.packW + 0.5 || h > board.packH + 0.5) {
+    showToast('A peça girada não cabe nesta chapa.', 'info', 4000)
+    return
+  }
+  const clamp = (v, max) => Math.max(0, Math.min(max, v))
+  const tries = [
+    [piece.x + (piece.w - w) / 2, piece.y + (piece.h - h) / 2],
+    [piece.x, piece.y],
+    [0, 0]
+  ]
+  for (const [tx, ty] of tries) {
+    const x = clamp(tx, board.packW - w)
+    const y = clamp(ty, board.packH - h)
+    if (!moveFits(board, piece, { x, y, w, h })) continue
+    pushManualUndo()
+    const map = manualMap()
+    if (!map) return
+    map[piece.uid] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, rotated: next }
+    persist({ silent: true })
+    recalc()
+    render()
+    return
+  }
+  showToast('Não há espaço livre para girar aqui. Mova a peça primeiro.', 'info', 4000)
+}
+
 function manualToolbar() {
   const p = project()
   const count = p && p.manual ? Object.keys(p.manual).length : 0
   return h('div', { class: 'card' }, [
     h('h2', {}, ['Ajuste manual do plano']),
     h('p', { class: 'help' }, [
-      'Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). As peças tracejadas são aproveitamento (fundos e caixotes).'
+      'Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). Use ↻ para girar as peças de aproveitamento (tracejadas); as com veio não giram. A borda dourada marca as peças que você já ajustou.'
     ]),
     h('div', { class: 'row' }, [
       h('button', { class: 'btn', disabled: !manualUndo.length, onClick: undoManual }, ['Desfazer']),
@@ -2772,12 +2812,15 @@ function sheetEl(board) {
     style: `width:${w}px;height:${hgt}px`
   })
   board.placements.forEach((p) => {
+    const hasMove = manual && !!(project() && project().manual && project().manual[p.uid])
     const box = h(
       'div',
       {
-        class: 'piece-box' + (p.hidden ? ' piece-fill' : ''),
+        class: 'piece-box' + (p.hidden ? ' piece-fill' : '') + (hasMove ? ' piece-manual' : ''),
         title: manual
-          ? 'Arraste para reposicionar'
+          ? canRotatePiece(p)
+            ? 'Arraste para reposicionar. Use ↻ para girar 90°.'
+            : 'Arraste para reposicionar (peça com veio: não gira).'
           : p.hidden
             ? 'Aproveitamento (peça oculta — pode girar e usar sobras)'
             : '',
@@ -2792,7 +2835,22 @@ function sheetEl(board) {
       [
         h('i', { class: 'piece-order' }, [String(p.order || '')]),
         h('b', {}, [[`[${p.furnitureCode || '?'}] `, p.name, p.rotated ? ' ↻' : '']]),
-        h('span', {}, [`${Math.round(p.w)} × ${Math.round(p.h)} mm`])
+        h('span', {}, [`${Math.round(p.w)} × ${Math.round(p.h)} mm`]),
+        manual && canRotatePiece(p)
+          ? h(
+              'button',
+              {
+                class: 'piece-rotate',
+                title: 'Girar 90°',
+                onPointerDown: (e) => e.stopPropagation(),
+                onClick: (e) => {
+                  e.stopPropagation()
+                  rotateManual(board, p)
+                }
+              },
+              ['↻']
+            )
+          : null
       ]
     )
     if (manual) attachManualDrag(board, box, p, scale)
