@@ -211,12 +211,79 @@ function placeRecord(item, o, x, y) {
     rotated: o.rotated,
     grain: item.grain,
     hidden: !!item.hidden,
+    length: Number(item.length),
+    width: Number(item.width),
     thickness: item.thickness,
     furnitureId: item.furnitureId || '',
     furnitureName: item.furnitureName || '',
     furnitureCode: item.furnitureCode || '',
     color: item.color || '#5c4033'
   }
+}
+
+function itemFromPlacement(p) {
+  return {
+    uid: p.uid,
+    id: p.pieceId,
+    name: p.name,
+    instance: p.instance,
+    qty: p.qty,
+    length: Number(p.length) || (p.rotated ? p.h : p.w),
+    width: Number(p.width) || (p.rotated ? p.w : p.h),
+    grain: p.grain,
+    hidden: !!p.hidden,
+    thickness: p.thickness,
+    furnitureId: p.furnitureId || '',
+    furnitureName: p.furnitureName || '',
+    furnitureCode: p.furnitureCode || '',
+    color: p.color || '#5c4033'
+  }
+}
+
+function rebuildFree(board, kerf) {
+  board.free = [{ x: 0, y: 0, w: board.W, h: board.H }]
+  for (const p of board.placements) {
+    const ow = occupy(p.w, kerf, board.W - p.x)
+    const oh = occupy(p.h, kerf, board.H - p.y)
+    board.free = splitFree(board.free, { x: p.x, y: p.y, w: ow, h: oh })
+  }
+}
+
+function compactBoards(boards, kerf) {
+  const out = boards.slice()
+  let changed = true
+  let guard = 0
+  while (changed && guard++ < 24) {
+    changed = false
+    for (let i = out.length - 1; i > 0; i--) {
+      const src = out[i]
+      const dests = []
+      for (let j = i - 1; j >= 0; j--) {
+        if (out[j].thickness === src.thickness) dests.push(out[j])
+      }
+      if (!dests.length) continue
+      for (const d of dests) rebuildFree(d, kerf)
+      const keep = []
+      const movers = [...src.placements].sort((a, b) => b.w * b.h - a.w * a.h)
+      for (const p of movers) {
+        const item = itemFromPlacement(p)
+        let moved = false
+        for (const d of dests) {
+          if (placeFree(d, item, kerf)) {
+            moved = true
+            changed = true
+            break
+          }
+        }
+        if (!moved) keep.push(p)
+      }
+      src.placements = keep
+    }
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (!out[i].placements.length) out.splice(i, 1)
+    }
+  }
+  return out
 }
 
 function newBoard(W, H, mode, thickness) {
@@ -318,13 +385,14 @@ export function nest(pieces, settings) {
       }
     }
 
-    for (const board of boards) {
+    const compacted = compactBoards(boards, kerf)
+    for (const board of compacted) {
       const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
       ordered.forEach((p, i) => {
         p.order = i + 1
       })
     }
-    return { boards, unplaced }
+    return { boards: compacted, unplaced }
   }
 
   const finish = (boards, unplaced) => {

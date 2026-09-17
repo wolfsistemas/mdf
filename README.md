@@ -45,6 +45,7 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Gaveteiro suspenso com fechadura configuravel
 - Plano de corte 2D: serra/guilhotina ou nesting livre
 - Pecas ocultas (fundos, caixotes de gaveta e tamponamento) entram como aproveitamento: podem girar e sao posicionadas por ultimo, para preencher sobras antes de abrir outra chapa (o app testa variacoes e usa a de menor numero de chapas)
+- Depois do encaixe, pecas da ultima chapa sao recolocadas nas sobras das chapas anteriores, se couberem, para nao abrir chapa extra
 - Numeracao e sequencia de corte por chapa (faixas) e exportacao do plano em PNG
 - Kerf (perda da serra) e refilo
 - Chapa padrao 2750 x 1830 mm, espessura padrao 15 mm
