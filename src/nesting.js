@@ -1,3 +1,5 @@
+import { sheetSpecs } from './store.js'
+
 function orientations(piece) {
   const L = Number(piece.length)
   const A = Number(piece.width)
@@ -231,11 +233,37 @@ function newBoard(W, H, mode, thickness) {
 export function nest(pieces, settings) {
   const kerf = Math.max(0, Number(settings.kerf) || 0)
   const trim = Math.max(0, Number(settings.trim) || 0)
-  const sheetW = Number(settings.sheetWidth)
-  const sheetH = Number(settings.sheetHeight)
-  const W = sheetW - 2 * trim
-  const H = sheetH - 2 * trim
   const mode = settings.cutMode === 'free' ? 'free' : 'guillotine'
+  const specs = sheetSpecs(settings).filter((sp) => sp.width - 2 * trim > 0 && sp.height - 2 * trim > 0)
+  const empty = {
+    boards: [],
+    unplaced: [],
+    sheetsNeeded: 0,
+    totalUsed: 0,
+    totalSheet: 0,
+    totalUsable: 0,
+    efficiency: 0,
+    wasteArea: 0
+  }
+  if (!specs.length) return empty
+
+  const itemFits = (item, sp) => {
+    const W = sp.width - 2 * trim
+    const H = sp.height - 2 * trim
+    return fits(W, H, item.length, item.width) || fits(W, H, item.width, item.length)
+  }
+  const specForItem = (item) => {
+    let exact = null
+    let any = null
+    for (const sp of specs) {
+      if (!itemFits(item, sp)) continue
+      const area = sp.width * sp.height
+      const cand = { sp, area }
+      if (!any || area < any.area) any = cand
+      if (sp.thickness === item.thickness && (!exact || area < exact.area)) exact = cand
+    }
+    return exact || any
+  }
 
   const items = expandPieces(pieces).sort((a, b) => {
     const aa = a.length * a.width
@@ -248,13 +276,10 @@ export function nest(pieces, settings) {
   const unplaced = []
 
   for (const item of items) {
-    const maxSide = Math.max(item.length, item.width)
-    const minSide = Math.min(item.length, item.width)
-    if (maxSide > Math.max(W, H) + 1e-6 || minSide > Math.min(W, H) + 1e-6) {
-      if (!fits(W, H, item.length, item.width) && !fits(W, H, item.width, item.length)) {
-        unplaced.push(item)
-        continue
-      }
+    const pick = specForItem(item)
+    if (!pick) {
+      unplaced.push(item)
+      continue
     }
 
     let placed = false
@@ -278,14 +303,14 @@ export function nest(pieces, settings) {
       if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
     }
     if (!placed) {
-      const board = newBoard(W, H, mode, item.thickness)
+      const board = newBoard(pick.sp.width - 2 * trim, pick.sp.height - 2 * trim, mode, item.thickness)
+      board.spec = pick.sp
       placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
       if (placed) boards.push(board)
       else unplaced.push(item)
     }
   }
 
-  const sheetArea = sheetW * sheetH
   for (const board of boards) {
     const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
     ordered.forEach((p, i) => {
@@ -293,12 +318,17 @@ export function nest(pieces, settings) {
     })
   }
   const mapped = boards.map((board, index) => {
+    const sp = board.spec
+    const W = sp.width - 2 * trim
+    const H = sp.height - 2 * trim
     const used = board.placements.reduce((s, p) => s + p.w * p.h, 0)
     const usable = W * H
     return {
       index: index + 1,
-      sheetWidth: sheetW,
-      sheetHeight: sheetH,
+      sheetWidth: sp.width,
+      sheetHeight: sp.height,
+      sheetName: sp.name,
+      sheetPrice: sp.price,
       trim,
       kerf,
       packW: W,
@@ -307,7 +337,7 @@ export function nest(pieces, settings) {
       placements: board.placements,
       usedArea: used,
       usableArea: usable,
-      sheetArea,
+      sheetArea: sp.width * sp.height,
       wasteArea: Math.max(0, usable - used),
       efficiency: usable > 0 ? (used / usable) * 100 : 0,
       mode
@@ -315,8 +345,8 @@ export function nest(pieces, settings) {
   })
 
   const totalUsed = mapped.reduce((s, b) => s + b.usedArea, 0)
-  const totalSheet = mapped.length * sheetArea
-  const totalUsable = mapped.length * (W * H)
+  const totalSheet = mapped.reduce((s, b) => s + b.sheetArea, 0)
+  const totalUsable = mapped.reduce((s, b) => s + b.usableArea, 0)
 
   return {
     boards: mapped,
@@ -350,11 +380,16 @@ export function summarize(project, settings, layout, pieces) {
   const areaM2 = list.reduce((s, p) => s + pieceAreaM2(p), 0)
   const tapeM = list.reduce((s, p) => s + edgeMeters(p), 0)
   const sheets = layout.sheetsNeeded
-  const sheetCost = sheets * Number(settings.sheetPrice || 0)
+  const boards = layout.boards || []
+  const sheetCost = boards.length
+    ? boards.reduce((s, b) => s + Number(b.sheetPrice || 0), 0)
+    : sheets * Number(settings.sheetPrice || 0)
   const tapeCost = tapeM * Number(settings.tapePricePerMeter || 0)
   const labor = (sheetCost + tapeCost) * (Number(settings.laborPercent || 0) / 100)
   const total = sheetCost + tapeCost + labor
-  const sheetAreaM2 = (Number(settings.sheetWidth) * Number(settings.sheetHeight) * sheets) / 1e6
+  const sheetAreaM2 = boards.length
+    ? boards.reduce((s, b) => s + b.sheetArea, 0) / 1e6
+    : (Number(settings.sheetWidth) * Number(settings.sheetHeight) * sheets) / 1e6
   const byFurniture = {}
   for (const p of list) {
     const key = p.furnitureId || '_avulso'

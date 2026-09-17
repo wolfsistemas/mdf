@@ -44,6 +44,7 @@ export function defaultSettings() {
     sheetThickness: 15,
     sheetPrice: 180,
     sheetName: 'MDF 15 mm 2750x1830',
+    extraSheets: [],
     tapePricePerMeter: 2.5,
     tapeName: 'Fita PVC 22 mm',
     hingePrice: 4.5,
@@ -58,6 +59,34 @@ export function defaultSettings() {
     shopPhone: '',
     shopLogo: ''
   }
+}
+
+export function sheetSpecs(settings) {
+  const s = settings || {}
+  const list = [
+    {
+      id: 'primary',
+      name: s.sheetName || 'MDF',
+      width: Number(s.sheetWidth) || 0,
+      height: Number(s.sheetHeight) || 0,
+      thickness: Number(s.sheetThickness) || 0,
+      price: Number(s.sheetPrice) || 0
+    }
+  ]
+  for (const e of s.extraSheets || []) {
+    const w = Number(e && e.width) || 0
+    const h = Number(e && e.height) || 0
+    if (!(w > 0 && h > 0)) continue
+    list.push({
+      id: (e && e.id) || uid(),
+      name: (e && e.name) || 'MDF',
+      width: w,
+      height: h,
+      thickness: Number(e && e.thickness) || Number(s.sheetThickness) || 0,
+      price: Number(e && e.price) || 0
+    })
+  }
+  return list
 }
 
 function sampleProject() {

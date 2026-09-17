@@ -60,13 +60,16 @@ export function itemCost(item, settings) {
   return { ...m, ...hw, panel, tape, material, labor, cost: material + labor + hw.hardware }
 }
 
-export function rateioCtx(furniture, settings, sheets, basis) {
+export function rateioCtx(furniture, settings, sheets, basis, layout) {
   let totalPanelLine = 0
   for (const f of furniture || []) {
     totalPanelLine += itemCost(f, settings).panel * unitQty(f)
   }
   const sheetCount = Math.max(0, Math.floor(Number(sheets) || 0))
-  const sheetCost = sheetCount * Number(settings.sheetPrice || 0)
+  const boards = (layout && layout.boards) || []
+  const sheetCost = boards.length
+    ? boards.reduce((s, b) => s + Number(b.sheetPrice || 0), 0)
+    : sheetCount * Number(settings.sheetPrice || 0)
   const wasteCost = Math.max(0, sheetCost - totalPanelLine)
   return {
     basis: basis === 'rateio' ? 'rateio' : 'used',

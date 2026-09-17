@@ -10,6 +10,8 @@ import {
   THICKNESS_PRESETS,
   SHEET_PRESETS,
   TAPE_PRESETS,
+  sheetSpecs,
+  newId,
   formatMoney,
   formatM2,
   formatMeters,
@@ -130,7 +132,7 @@ function recalc() {
   piecesCache = flattenProjectPieces(p)
   layoutCache = nest(piecesCache, state.settings)
   summaryCache = summarize(p, state.settings, layoutCache, piecesCache)
-  saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, p.billingBasis || 'used')
+  saleCtx = calcRateioCtx(furnitureList(), state.settings, layoutCache.sheetsNeeded, p.billingBasis || 'used', layoutCache)
 }
 function persist(opts) {
   saveState(state)
@@ -307,7 +309,7 @@ function moneyForProject(p) {
   const furniture = (p && p.furniture) || []
   const pieces = flattenProjectPieces(p)
   const layout = nest(pieces, state.settings)
-  const ctx = calcRateioCtx(furniture, state.settings, layout.sheetsNeeded, (p && p.billingBasis) || 'used')
+  const ctx = calcRateioCtx(furniture, state.settings, layout.sheetsNeeded, (p && p.billingBasis) || 'used', layout)
   return calcProjectTotals(furniture, state.settings, ctx)
 }
 
@@ -325,7 +327,7 @@ function saleCalcForStaged(item) {
   const drop = new Set([item.id, modal && modal.targetId].filter(Boolean))
   const list = [...furnitureList().filter((f) => !drop.has(f.id)), item]
   const lay = nest(flattenProjectPieces({ furniture: list }), state.settings)
-  return calcItemSale(item, state.settings, calcRateioCtx(list, state.settings, lay.sheetsNeeded, 'rateio'))
+  return calcItemSale(item, state.settings, calcRateioCtx(list, state.settings, lay.sheetsNeeded, 'rateio', lay))
 }
 
 /* ====================== descrição / ficha ====================== */
@@ -2452,9 +2454,22 @@ function closingCard() {
   const s = summaryCache
   const set = state.settings
   const basis = projectBillingBasis()
+  const sheetGroups = []
+  for (const b of (layoutCache && layoutCache.boards) || []) {
+    const key = `${b.sheetName}|${b.sheetWidth}x${b.sheetHeight}|${b.sheetPrice}|${b.thickness}`
+    let g = sheetGroups.find((x) => x.key === key)
+    if (!g) {
+      g = { key, name: b.sheetName || 'MDF', width: b.sheetWidth, height: b.sheetHeight, price: Number(b.sheetPrice) || 0, count: 0 }
+      sheetGroups.push(g)
+    }
+    g.count += 1
+  }
   return h('div', { class: 'card' }, [
     h('h2', {}, ['Fechamento da obra (custo real de chapa)']),
-    costLine('Chapas compradas', `${s.sheets} × ${formatMoney(Number(set.sheetPrice || 0))}`, formatMoney(s.sheetCost)),
+    costLine('Chapas compradas', `${s.sheets} chapa(s)`, formatMoney(s.sheetCost)),
+    ...sheetGroups.map((g) =>
+      costLine(`   ${g.count}× ${g.name} ${g.width}×${g.height} mm`, formatMoney(g.price), formatMoney(g.count * g.price))
+    ),
     costLine('Fita de borda', `${formatMeters(s.tapeM)} × ${formatMoney(Number(set.tapePricePerMeter || 0))}/m`, formatMoney(s.tapeCost)),
     hardwareTotalLine(),
     Number(set.laborPercent)
@@ -2615,7 +2630,9 @@ function sheetEl(board) {
     sheet.append(box)
   })
   return h('div', { style: 'margin-bottom:18px' }, [
-    h('h3', {}, [`Chapa ${board.index} · ${board.thickness || '—'} mm — ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças`]),
+    h('h3', {}, [
+      `Chapa ${board.index} · ${board.sheetName || 'MDF'} ${Math.round(board.sheetWidth)}×${Math.round(board.sheetHeight)} · ${board.thickness || '—'} mm — ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças`
+    ]),
     sheet
   ])
 }
@@ -2676,6 +2693,53 @@ async function cancelPlan() {
   } finally {
     overlay.remove()
   }
+}
+
+function extraSheetsCard(s, set) {
+  const list = s.extraSheets || []
+  const update = (id, patch) =>
+    set({ extraSheets: list.map((e) => (e.id === id ? { ...e, ...patch } : e)) })
+  const remove = (id) => set({ extraSheets: list.filter((e) => e.id !== id) })
+  const add = (base) =>
+    set({
+      extraSheets: [
+        ...list,
+        {
+          id: newId(),
+          name: (base && base.name) || 'MDF',
+          width: (base && base.width) || 2440,
+          height: (base && base.height) || 1220,
+          thickness: Number(s.sheetThickness) || 15,
+          price: Number(s.sheetPrice) || 0
+        }
+      ]
+    })
+  return h('div', { class: 'card' }, [
+    h('h2', {}, ['Outros tamanhos de chapa']),
+    h('p', { class: 'help' }, [
+      'A chapa padrão acima é a principal. Cadastre aqui outras chapas (ex.: 25 mm para o tamponamento ou 2440×1220 para retalhos). O plano usa a menor chapa que couber a peça, respeitando a espessura.'
+    ]),
+    list.length
+      ? h(
+          'div',
+          {},
+          list.map((e) =>
+            h('div', { class: 'row', style: 'margin-top:8px' }, [
+              field('Nome', text(e.name || '', (v) => update(e.id, { name: v })), 'grow'),
+              field('Largura mm', inputNum(e.width || 0, (v) => update(e.id, { width: v }))),
+              field('Altura mm', inputNum(e.height || 0, (v) => update(e.id, { height: v }))),
+              field('Espessura mm', inputNum(e.thickness || 0, (v) => update(e.id, { thickness: v }))),
+              field('Preço', inputNum(e.price || 0, (v) => update(e.id, { price: v }), { step: '0.01' })),
+              h('button', { class: 'btn small ghost danger-side', type: 'button', onClick: () => remove(e.id) }, ['Remover'])
+            ])
+          )
+        )
+      : h('p', { class: 'help' }, ['Nenhuma chapa extra.']),
+    h('div', { class: 'row', style: 'margin-top:10px' }, [
+      h('button', { class: 'btn small', type: 'button', onClick: () => add(null) }, ['Adicionar chapa'])
+    ]),
+    presetRow('Atalhos', SHEET_PRESETS, (p) => add({ name: p.name, width: p.width, height: p.height }))
+  ])
 }
 
 function tabConta() {
@@ -2773,6 +2837,7 @@ function tabConta() {
         'Kerf é a perda da serra. Refilo reserva a borda da chapa. Serra/guilhotina gera faixas. Nesting livre encaixa melhor.'
       ])
     ]),
+    extraSheetsCard(s, set),
     h('div', { class: 'card' }, [
       h('h2', {}, ['Fita de borda padrão']),
       h('div', { class: 'row' }, [

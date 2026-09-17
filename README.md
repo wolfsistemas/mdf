@@ -46,6 +46,7 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Numeracao e sequencia de corte por chapa (faixas) e exportacao do plano em PNG
 - Kerf (perda da serra) e refilo
 - Chapa padrao 2750 x 1830 mm, espessura padrao 15 mm
+- Outros tamanhos de chapa (ex.: 25 mm para tamponamento, 2440 x 1220): o plano escolhe a menor chapa que couber, respeitando a espessura, e o custo soma o preco de cada chapa usada
 - Custo de chapas + fita + mao de obra (percentual)
 - Exportar CSV das pecas, planilha CorteCloud e PDF interno do plano + custos
 

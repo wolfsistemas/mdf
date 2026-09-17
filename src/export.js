@@ -375,7 +375,7 @@ function boardPage(doc, project, settings, board, pageW, pageH, margin) {
   doc.setFontSize(9)
   doc.setTextColor(90, 78, 66)
   doc.text(
-    `${board.sheetWidth} × ${board.sheetHeight} × ${board.thickness || settings.sheetThickness} mm · aproveitamento ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças · modo ${board.mode === 'free' ? 'nesting livre' : 'serra / guilhotina'}`,
+    `${board.sheetName || settings.sheetName || 'MDF'} · ${board.sheetWidth} × ${board.sheetHeight} × ${board.thickness || settings.sheetThickness} mm · aproveitamento ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças · modo ${board.mode === 'free' ? 'nesting livre' : 'serra / guilhotina'}`,
     margin,
     24
   )
@@ -444,7 +444,7 @@ function costPage(doc, project, settings, summary, pageW, pageH, margin) {
 
   const lines = [
     ['Cliente', project.client || '—', ''],
-    ['Chapas', `${summary.sheets} × ${formatMoney(Number(settings.sheetPrice || 0))}`, formatMoney(summary.sheetCost)],
+    ['Chapas', `${summary.sheets} chapa(s)`, formatMoney(summary.sheetCost)],
     ['Fita de borda', `${formatMeters(summary.tapeM)} × ${formatMoney(Number(settings.tapePricePerMeter || 0))}/m`, formatMoney(summary.tapeCost)]
   ]
   if (summary.labor) {
