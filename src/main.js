@@ -68,6 +68,7 @@ qrcode.stringToBytes =
 
 const state = loadState()
 let tab = 'projetos'
+let lastRenderTab = null
 let selectedFurnitureId = null
 let layoutCache = null
 let summaryCache = null
@@ -3092,6 +3093,12 @@ function render() {
   const root = document.getElementById('app')
   const scroller = document.scrollingElement || document.documentElement
   const scrollTop = scroller.scrollTop
+  const contentEl = document.querySelector('.content')
+  const contentScroll = contentEl ? contentEl.scrollTop : 0
+  const planEl = document.getElementById('plan-sheets')
+  const planScroll = planEl ? { top: planEl.scrollTop, left: planEl.scrollLeft } : null
+  const tabChanged = tab !== lastRenderTab
+  lastRenderTab = tab
   const prevActive = document.activeElement
   const prevTag = prevActive ? prevActive.tagName : ''
   const isEdit = prevTag === 'INPUT' || prevTag === 'SELECT' || prevTag === 'TEXTAREA'
@@ -3164,19 +3171,32 @@ function render() {
             : editorModal()
     )
   }
-  if (isEdit) {
+  const newContent = root.querySelector('.content')
+  if (tabChanged) {
+    if (newContent) newContent.scrollTop = 0
+  } else {
     scroller.scrollTop = scrollTop
+    if (newContent) newContent.scrollTop = contentScroll
+    if (planScroll) {
+      const newPlan = root.querySelector('#plan-sheets')
+      if (newPlan) {
+        newPlan.scrollTop = planScroll.top
+        newPlan.scrollLeft = planScroll.left
+      }
+    }
+  }
+  if (isEdit) {
     if (prevKey) {
       const restored = root.querySelector(`[data-k="${prevKey}"]`)
       if (restored) {
         restored.focus()
         if ((prevTag === 'INPUT' || prevTag === 'TEXTAREA') && prevSel != null) {
-            try {
-              restored.setSelectionRange(prevSel, prevSel)
-            } catch {
-              /* número sem caret */
-            }
+          try {
+            restored.setSelectionRange(prevSel, prevSel)
+          } catch {
+            /* número sem caret */
           }
+        }
       }
     }
   }
