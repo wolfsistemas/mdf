@@ -524,7 +524,7 @@ export function nest(pieces, settings) {
   const kerf = Math.max(0, Number(settings.kerf) || 0)
   const trim = Math.max(0, Number(settings.trim) || 0)
   const rawMode = ['mac', 'free', 'manual'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
-  const mode = rawMode === 'guillotine' ? 'guillotine' : 'free'
+  const mode = rawMode === 'free' || rawMode === 'mac' ? 'free' : 'guillotine'
   const tight = rawMode === 'mac'
   const specs = sheetSpecs(settings).filter((sp) => sp.width - 2 * trim > 0 && sp.height - 2 * trim > 0)
   const empty = {

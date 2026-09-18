@@ -2707,7 +2707,7 @@ function manualToolbar() {
   return h('div', { class: 'card' }, [
     h('h2', {}, ['Ajuste manual do plano']),
     h('p', { class: 'help' }, [
-      'Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). Use ↻ para girar as peças de aproveitamento (tracejadas); as com veio não giram. A borda dourada marca as peças que você já ajustou.'
+      'O plano começa no corte serra/guilhotina. Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). Use ↻ para girar as peças de aproveitamento (tracejadas); as com veio não giram. A borda dourada marca as peças que você já ajustou.'
     ]),
     h('div', { class: 'row' }, [
       h('button', { class: 'btn', disabled: !manualUndo.length, onClick: undoManual }, ['Desfazer']),
