@@ -44,7 +44,7 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Tamponamento de tampo de mesa: reforco (dobrar/engrossar o tampo) ou borda de 30/50/100 mm, no tampo e nas laterais/pes
 - Gaveteiro suspenso com fechadura configuravel
 - Plano de corte 2D em 4 modos: serra/guilhotina (padrao), nesting livre, MAC (maximo aproveitamento) e manual (arrastar pecas na chapa)
-- No modo manual da para arrastar cada peca: encaixa nas bordas e no kerf da serra, fica vermelho em posicao invalida, com Desfazer e Limpar ajustes
+- No modo manual da para arrastar cada peca: encaixa nas bordas e no kerf da serra, fica vermelho em posicao invalida, com Desfazer e Limpar ajustes; pecas de aproveitamento (sem veio) giram 90 graus no botao ↻ e as ajustadas ganham borda dourada
 - Pecas ocultas (fundos, caixotes de gaveta e tamponamento) entram como aproveitamento: podem girar e sao posicionadas por ultimo, para preencher sobras antes de abrir outra chapa (o app testa variacoes e usa a de menor numero de chapas)
 - Depois do encaixe, pecas da ultima chapa sao recolocadas nas sobras das chapas anteriores, se couberem, para nao abrir chapa extra
 - No modo MAC as pecas de aproveitamento (sem veio) sao agrupadas no canto da chapa, para a sobra ficar numa faixa continua reaproveitavel
