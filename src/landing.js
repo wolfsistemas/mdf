@@ -203,7 +203,7 @@ const SHOTS = [
 ]
 
 function windowBar() {
-  return `<div class="lshot-bar"><i></i><i></i><i></i><em>mdfatelier.app/#/app</em></div>`
+  return `<div class="lshot-bar"><i></i><i></i><i></i><em>wolfsaas.com.br/mdf/#/app</em></div>`
 }
 
 function shotsHTML() {
