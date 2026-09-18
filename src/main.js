@@ -717,8 +717,13 @@ function showSavedToast(debounce) {
 
 function applyCloudData(data) {
   if (data.settings) state.settings = { ...state.settings, ...data.settings }
-  state.projects = data.projects
-  state.activeProjectId = data.activeProjectId || (data.projects[0] && data.projects[0].id)
+  const incoming = data.projects || []
+  const localManual = new Map((state.projects || []).map((p) => [p.id, p.manual]))
+  state.projects = incoming.map((p) => ({
+    ...p,
+    manual: p.manual && Object.keys(p.manual).length ? p.manual : localManual.get(p.id) || {}
+  }))
+  state.activeProjectId = data.activeProjectId || (incoming[0] && incoming[0].id)
   selectedFurnitureId = null
   modal = null
   persist({ silent: true })

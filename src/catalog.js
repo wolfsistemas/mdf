@@ -986,12 +986,25 @@ export function flattenProjectPieces(project) {
   for (const item of project.furniture || []) {
     const generated = generateFurniturePieces(item)
     const extras = (item.extraPieces || []).map((x) => ({ ...x, edges: { ...x.edges } }))
-    const all = [...generated, ...extras]
+    const all = [
+      ...generated.map((p) => ({ p, stable: false })),
+      ...extras.map((p) => ({ p, stable: true }))
+    ]
     const qtyMul = Math.max(1, nint(item.qty, 1))
-    all.forEach((p, idx) => {
+    const seen = new Map()
+    all.forEach(({ p, stable }, idx) => {
+      let key
+      if (stable && p.id) {
+        key = `x${p.id}`
+      } else {
+        const base = String(p.name || `p${idx}`).replace(/\s+/g, '_')
+        const n = (seen.get(base) || 0) + 1
+        seen.set(base, n)
+        key = `${base}#${n}`
+      }
       out.push({
         ...p,
-        id: `${item.id}-${p.id || idx}`,
+        id: `${item.id}-${key}`,
         qty: (Number(p.qty) || 0) * qtyMul,
         furnitureId: item.id,
         furnitureName: item.name,
