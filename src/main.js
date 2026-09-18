@@ -17,7 +17,7 @@ import {
   formatMeters,
   formatMm
 } from './store.js'
-import { nest, summarize, cutSequence, edgeMeters, pieceAreaM2, overlapGap, placementFits, applyManualMoves } from './nesting.js'
+import { nest, summarize, cutSequence, edgeMeters, pieceAreaM2, overlapGap, placementFits, applyManualMoves, largestFreeRect, tightenBoard } from './nesting.js'
 import { exportCsv, exportCorteCloud, exportPdf, exportPlanPng, htmlPagesToPdfBlob, quoteFilename, savePdfFile } from './export.js'
 import {
   CATALOG_GROUPS,
@@ -2548,6 +2548,36 @@ function tabPecas() {
 /* ============================== CORTE MANUAL ============================== */
 
 let manualUndo = []
+let manualSelection = new Set()
+
+function clearManualSelection(redraw) {
+  if (!manualSelection.size) return
+  manualSelection.clear()
+  if (redraw) render()
+}
+
+function toggleManualSelection(uid, additive) {
+  if (additive) {
+    if (manualSelection.has(uid)) manualSelection.delete(uid)
+    else manualSelection.add(uid)
+  } else if (manualSelection.size === 1 && manualSelection.has(uid)) {
+    manualSelection.clear()
+  } else {
+    manualSelection.clear()
+    manualSelection.add(uid)
+  }
+  render()
+}
+
+function selectedPlacements() {
+  const pad = state.settings.cutMode === 'manual'
+  if (!pad || !layoutCache) return []
+  const out = []
+  for (const b of layoutCache.boards) {
+    for (const p of b.placements) if (manualSelection.has(p.uid)) out.push({ board: b, piece: p })
+  }
+  return out
+}
 
 function manualMap() {
   const p = project()
@@ -2595,6 +2625,39 @@ function moveFits(board, piece, cand) {
   return true
 }
 
+function makeGhost(box, piece) {
+  const g = document.createElement('div')
+  g.className = 'piece-ghost'
+  g.style.width = `${box.offsetWidth}px`
+  g.style.height = `${box.offsetHeight}px`
+  g.style.background = piece.color || '#5c4033'
+  g.textContent = `${Math.round(piece.w)} × ${Math.round(piece.h)}`
+  document.body.append(g)
+  return g
+}
+
+function sheetFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y)
+  return el ? el.closest('.sheet') : null
+}
+
+function crossCandidate(sheet, piece, clientX, clientY, fx, fy, w, h) {
+  const board = sheet.__board
+  const scale = sheet.__scale
+  if (!board || !(scale > 0)) return null
+  const r = sheet.getBoundingClientRect()
+  let x = (clientX - r.left) / scale - board.trim - w * fx
+  let y = (clientY - r.top) / scale - board.trim - h * fy
+  x = snapValue(x, manualSnapTargets(board, piece, 'x', w), 6)
+  y = snapValue(y, manualSnapTargets(board, piece, 'y', h), 6)
+  x = Math.max(0, Math.min(board.packW - w, x))
+  y = Math.max(0, Math.min(board.packH - h, y))
+  const cand = { x, y, w, h }
+  const valid =
+    placementFits(board, cand) && !board.placements.some((q) => overlapGap(cand, q, board.kerf))
+  return { board, x, y, valid }
+}
+
 function attachManualDrag(board, box, piece, scale) {
   if (!(scale > 0)) return
   box.classList.add('piece-drag')
@@ -2608,11 +2671,26 @@ function attachManualDrag(board, box, piece, scale) {
     const w = piece.w
     const h = piece.h
     const tol = 6
+    const boxRect = box.getBoundingClientRect()
+    const fx = boxRect.width > 0 ? (startX - boxRect.left) / boxRect.width : 0.5
+    const fy = boxRect.height > 0 ? (startY - boxRect.top) / boxRect.height : 0.5
     let last = { x: ox, y: oy }
     let valid = true
+    let moved = false
+    let ghost = null
+    let cross = null
+    let hover = null
     pushManualUndo()
     box.classList.add('dragging')
+    box.style.pointerEvents = 'none'
+    const setHover = (sheet) => {
+      if (hover === sheet) return
+      if (hover) hover.classList.remove('drop-target')
+      hover = sheet
+      if (hover) hover.classList.add('drop-target')
+    }
     const onMove = (e) => {
+      if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) moved = true
       let nx = ox + (e.clientX - startX) / scale
       let ny = oy + (e.clientY - startY) / scale
       nx = snapValue(nx, manualSnapTargets(board, piece, 'x', w), tol)
@@ -2621,15 +2699,60 @@ function attachManualDrag(board, box, piece, scale) {
       ny = Math.max(0, Math.min(board.packH - h, ny))
       last = { x: nx, y: ny }
       valid = moveFits(board, piece, { x: nx, y: ny, w, h })
-      box.style.left = `${(board.trim + nx) * scale}px`
-      box.style.top = `${(board.trim + ny) * scale}px`
-      box.classList.toggle('piece-bad', !valid)
+      const sheet = sheetFromPoint(e.clientX, e.clientY)
+      if (sheet && sheet.__board && sheet.__board.index !== board.index) {
+        cross = crossCandidate(sheet, piece, e.clientX, e.clientY, fx, fy, w, h)
+        setHover(sheet)
+        box.style.visibility = 'hidden'
+        if (!ghost) ghost = makeGhost(box, piece)
+        ghost.style.display = ''
+        ghost.style.left = `${e.clientX - fx * ghost.offsetWidth}px`
+        ghost.style.top = `${e.clientY - fy * ghost.offsetHeight}px`
+        ghost.classList.toggle('piece-bad', !(cross && cross.valid))
+      } else {
+        cross = null
+        setHover(null)
+        box.style.visibility = ''
+        if (ghost) ghost.style.display = 'none'
+        box.style.left = `${(board.trim + nx) * scale}px`
+        box.style.top = `${(board.trim + ny) * scale}px`
+        box.classList.toggle('piece-bad', !valid)
+      }
     }
-    const onUp = () => {
+    const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       box.classList.remove('dragging', 'piece-bad')
+      box.style.visibility = ''
+      box.style.pointerEvents = ''
+      setHover(null)
+      if (ghost) ghost.remove()
+    }
+    const onCancel = () => {
+      cleanup()
+      manualUndo.pop()
+      render()
+    }
+    const onUp = (e) => {
+      cleanup()
+      if (cross && cross.valid) {
+        const map = manualMap()
+        if (!map) return
+        map[piece.uid] = {
+          x: Math.round(cross.x * 10) / 10,
+          y: Math.round(cross.y * 10) / 10,
+          rotated: !!piece.rotated,
+          board: cross.board.index
+        }
+        persist({ silent: true })
+        return
+      }
+      if (!moved) {
+        manualUndo.pop()
+        toggleManualSelection(piece.uid, !!(e && (e.shiftKey || e.metaKey || e.ctrlKey)))
+        return
+      }
       const unchanged = Math.abs(last.x - ox) < 0.05 && Math.abs(last.y - oy) < 0.05
       if (!valid || unchanged) {
         manualUndo.pop()
@@ -2641,13 +2764,14 @@ function attachManualDrag(board, box, piece, scale) {
       map[piece.uid] = {
         x: Math.round(last.x * 10) / 10,
         y: Math.round(last.y * 10) / 10,
-        rotated: !!piece.rotated
+        rotated: !!piece.rotated,
+        board: board.index
       }
       persist({ silent: true })
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   })
 }
 
@@ -2699,28 +2823,154 @@ function rotateManual(board, piece) {
     pushManualUndo()
     const map = manualMap()
     if (!map) return
-    map[piece.uid] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, rotated: next }
+    map[piece.uid] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, rotated: next, board: board.index }
     persist({ silent: true })
     return
   }
   showToast('Não há espaço livre para girar aqui. Mova a peça primeiro.', 'info', 4000)
 }
 
+function tightenManualSheet(board) {
+  const packed = tightenBoard(board)
+  if (!packed.length) return
+  pushManualUndo()
+  const map = manualMap()
+  if (!map) return
+  for (const item of packed) {
+    map[item.uid] = {
+      x: Math.round(item.x * 10) / 10,
+      y: Math.round(item.y * 10) / 10,
+      rotated: !!item.rotated,
+      board: board.index
+    }
+  }
+  persist({ silent: true })
+}
+
+function applyManualGroup(board, updates) {
+  const moving = new Set(updates.map((u) => u.piece.uid))
+  const occ = board.placements
+    .filter((q) => !moving.has(q.uid))
+    .map((q) => ({ uid: q.uid, x: q.x, y: q.y, w: q.w, h: q.h }))
+  for (const u of updates) {
+    const cand = { x: u.x, y: u.y, w: u.piece.w, h: u.piece.h }
+    if (!placementFits(board, cand) || occ.some((q) => overlapGap(cand, q, board.kerf))) return false
+    occ.push({ uid: u.piece.uid, x: u.x, y: u.y, w: u.piece.w, h: u.piece.h })
+  }
+  return true
+}
+
+function commitManualGroup(board, updates) {
+  const map = manualMap()
+  if (!map) return
+  for (const u of updates) {
+    map[u.piece.uid] = {
+      x: Math.round(u.x * 10) / 10,
+      y: Math.round(u.y * 10) / 10,
+      rotated: !!u.piece.rotated,
+      board: board.index
+    }
+  }
+  persist({ silent: true })
+}
+
+function alignManual(mode) {
+  const sel = selectedPlacements()
+  if (sel.length < 2) return
+  const board = sel[0].board
+  if (sel.some((s) => s.board !== board)) {
+    showToast('Selecione peças da mesma chapa para alinhar.', 'info', 4000)
+    return
+  }
+  const xs = sel.map((s) => s.piece.x)
+  const ys = sel.map((s) => s.piece.y)
+  const rights = sel.map((s) => s.piece.x + s.piece.w)
+  const bottoms = sel.map((s) => s.piece.y + s.piece.h)
+  const updates = sel.map((s) => {
+    const p = s.piece
+    if (mode === 'left') return { piece: p, x: Math.min(...xs), y: p.y }
+    if (mode === 'right') return { piece: p, x: Math.max(...rights) - p.w, y: p.y }
+    if (mode === 'top') return { piece: p, x: p.x, y: Math.min(...ys) }
+    return { piece: p, x: p.x, y: Math.max(...bottoms) - p.h }
+  })
+  if (!applyManualGroup(board, updates)) {
+    showToast('O alinhamento geraria sobreposição nesta chapa.', 'info', 4000)
+    return
+  }
+  pushManualUndo()
+  commitManualGroup(board, updates)
+}
+
+function distributeManual(axis) {
+  const sel = selectedPlacements()
+  if (sel.length < 3) {
+    showToast('Distribuir exige ao menos 3 peças selecionadas.', 'info', 4000)
+    return
+  }
+  const board = sel[0].board
+  if (sel.some((s) => s.board !== board)) {
+    showToast('Selecione peças da mesma chapa para distribuir.', 'info', 4000)
+    return
+  }
+  const horiz = axis === 'x'
+  const list = [...sel].sort((a, b) =>
+    horiz
+      ? a.piece.x - b.piece.x || a.piece.y - b.piece.y
+      : a.piece.y - b.piece.y || a.piece.x - b.piece.x
+  )
+  const lo = Math.min(...list.map((s) => (horiz ? s.piece.x : s.piece.y)))
+  const hi = Math.max(...list.map((s) => (horiz ? s.piece.x + s.piece.w : s.piece.y + s.piece.h)))
+  const total = list.reduce((sum, s) => sum + (horiz ? s.piece.w : s.piece.h), 0)
+  const gap = (hi - lo - total) / (list.length - 1)
+  if (gap < -0.05) {
+    showToast('Não há espaço para distribuir sem sobrepor.', 'info', 4000)
+    return
+  }
+  let cursor = lo
+  const updates = list.map((s) => {
+    const p = s.piece
+    const u = horiz ? { piece: p, x: cursor, y: p.y } : { piece: p, x: p.x, y: cursor }
+    cursor += (horiz ? p.w : p.h) + gap
+    return u
+  })
+  if (!applyManualGroup(board, updates)) {
+    showToast('A distribuição geraria sobreposição nesta chapa.', 'info', 4000)
+    return
+  }
+  pushManualUndo()
+  commitManualGroup(board, updates)
+}
+
 function manualToolbar() {
   const p = project()
   const count = p && p.manual ? Object.keys(p.manual).length : 0
+  const selCount = selectedPlacements().length
+  const btn = (label, title, onClick, disabled) =>
+    h('button', { class: 'btn', title, disabled: !!disabled, onClick }, [label])
   return h('div', { class: 'card' }, [
     h('h2', {}, ['Ajuste manual do plano']),
     h('p', { class: 'help' }, [
-      'O plano começa no corte serra/guilhotina. Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Vermelho = posição inválida (não deixa sobrepor nem passar da chapa). Use ↻ para girar as peças de aproveitamento (tracejadas); as com veio não giram. A borda dourada marca as peças que você já ajustou.'
+      'O plano começa no corte serra/guilhotina. Arraste as peças na chapa: elas encaixam nas bordas e no kerf da serra. Para levar uma peça a outra chapa, arraste até ela. Clique numa peça para selecionar (Shift/Ctrl soma várias) e use alinhar/distribuir. Vermelho = posição inválida. Use ↻ para girar as peças de aproveitamento (tracejadas). Borda dourada = peça ajustada; borda azul = selecionada.'
     ]),
     h('div', { class: 'row' }, [
-      h('button', { class: 'btn', disabled: !manualUndo.length, onClick: undoManual }, ['Desfazer']),
-      h('button', { class: 'btn', disabled: !count, onClick: clearManual }, ['Limpar ajustes']),
+      btn('Desfazer', 'Desfazer o último ajuste', undoManual, !manualUndo.length),
+      btn('Limpar ajustes', 'Voltar ao plano automático', clearManual, !count),
+      btn('Limpar seleção', 'Desmarcar peças', () => clearManualSelection(true), !selCount),
       h('span', { class: 'help', style: 'align-self:center' }, [
         count ? `${count} peça(s) com posição manual` : 'Nenhum ajuste manual ainda'
       ])
-    ])
+    ]),
+    selCount >= 2
+      ? h('div', { class: 'row' }, [
+          h('span', { class: 'help', style: 'align-self:center' }, [`${selCount} selecionada(s):`]),
+          btn('Alinhar esq.', '', () => alignManual('left')),
+          btn('Alinhar dir.', '', () => alignManual('right')),
+          btn('Alinhar topo', '', () => alignManual('top')),
+          btn('Alinhar base', '', () => alignManual('bottom')),
+          btn('Distribuir H', '', () => distributeManual('x'), selCount < 3),
+          btn('Distribuir V', '', () => distributeManual('y'), selCount < 3)
+        ])
+      : null
   ])
 }
 
@@ -2806,17 +3056,32 @@ function sheetEl(board) {
   const hgt = board.sheetHeight * scale
   const sheet = h('div', {
     class: 'sheet' + (manual ? ' sheet-manual' : ''),
-    style: `width:${w}px;height:${hgt}px`
+    style: `width:${w}px;height:${hgt}px`,
+    onClick: manual
+      ? (e) => {
+          if (e.target === sheet && manualSelection.size) {
+            manualSelection.clear()
+            render()
+          }
+        }
+      : undefined
   })
+  sheet.__board = board
+  sheet.__scale = scale
   board.placements.forEach((p) => {
     const hasMove = manual && !!(project() && project().manual && project().manual[p.uid])
+    const selected = manual && manualSelection.has(p.uid)
     const box = h(
       'div',
       {
-        class: 'piece-box' + (p.hidden ? ' piece-fill' : '') + (hasMove ? ' piece-manual' : ''),
+        class:
+          'piece-box' +
+          (p.hidden ? ' piece-fill' : '') +
+          (hasMove ? ' piece-manual' : '') +
+          (selected ? ' piece-selected' : ''),
         title: manual
           ? canRotatePiece(p)
-            ? 'Arraste para reposicionar. Use ↻ para girar 90°.'
+            ? 'Arraste para reposicionar (ou para outra chapa). Use ↻ para girar 90°.'
             : 'Arraste para reposicionar (peça com veio: não gira).'
           : p.hidden
             ? 'Aproveitamento (peça oculta — pode girar e usar sobras)'
@@ -2853,9 +3118,30 @@ function sheetEl(board) {
     if (manual) attachManualDrag(board, box, p, scale)
     sheet.append(box)
   })
+  const free = manual ? largestFreeRect(board) : null
   return h('div', { style: 'margin-bottom:18px' }, [
-    h('h3', {}, [
-      `Chapa ${board.index} · ${board.sheetName || 'MDF'} ${Math.round(board.sheetWidth)}×${Math.round(board.sheetHeight)} · ${board.thickness || '—'} mm — ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças`
+    h('div', { class: 'sheet-head' }, [
+      h('h3', {}, [
+        `Chapa ${board.index} · ${board.sheetName || 'MDF'} ${Math.round(board.sheetWidth)}×${Math.round(board.sheetHeight)} · ${board.thickness || '—'} mm — ${board.efficiency.toFixed(1)}% · ${board.placements.length} peças`
+      ]),
+      manual
+        ? h('span', { class: 'sheet-actions' }, [
+            free && free.w > 0 && free.h > 0
+              ? h('span', { class: 'help sheet-free' }, [
+                  `Sobra contínua ${Math.round(free.w)} × ${Math.round(free.h)} mm`
+                ])
+              : null,
+            h(
+              'button',
+              {
+                class: 'btn small',
+                title: 'Reencaixar as peças desta chapa (máximo aproveitamento)',
+                onClick: () => tightenManualSheet(board)
+              },
+              ['Encaixar no canto']
+            )
+          ])
+        : null
     ]),
     sheet
   ])

@@ -448,31 +448,104 @@ function manualCandidate(piece, move) {
   }
 }
 
+function refreshBoard(board) {
+  const used = board.placements.reduce((s, p) => s + p.w * p.h, 0)
+  board.usedArea = used
+  board.wasteArea = Math.max(0, board.usableArea - used)
+  board.efficiency = board.usableArea > 0 ? (used / board.usableArea) * 100 : 0
+  const ordered = [...board.placements].sort((a, b) => a.y - b.y || a.x - b.x)
+  ordered.forEach((p, i) => {
+    p.order = i + 1
+  })
+}
+
+function refreshLayout(layout) {
+  const boards = layout.boards || []
+  const totalUsed = boards.reduce((s, b) => s + b.usedArea, 0)
+  const totalSheet = boards.reduce((s, b) => s + b.sheetArea, 0)
+  const totalUsable = boards.reduce((s, b) => s + b.usableArea, 0)
+  layout.sheetsNeeded = boards.length
+  layout.totalUsed = totalUsed
+  layout.totalSheet = totalSheet
+  layout.totalUsable = totalUsable
+  layout.efficiency = totalUsable > 0 ? (totalUsed / totalUsable) * 100 : 0
+  layout.wasteArea = Math.max(0, totalUsable - totalUsed)
+}
+
 export function applyManualMoves(layout, moves) {
   if (!layout || !moves) return layout
-  for (const board of layout.boards) {
-    const moved = board.placements.filter((q) => moves[q.uid])
-    if (!moved.length) continue
-    const occ = board.placements.map((q) => ({ uid: q.uid, x: q.x, y: q.y, w: q.w, h: q.h }))
-    for (const piece of moved) {
-      const cand = manualCandidate(piece, moves[piece.uid])
-      if (!Number.isFinite(cand.x) || !Number.isFinite(cand.y)) continue
-      const at = occ.findIndex((q) => q.uid === piece.uid)
+  const boards = layout.boards || []
+  const byIndex = new Map(boards.map((b) => [b.index, b]))
+  const occBy = new Map(
+    boards.map((b) => [b.index, b.placements.map((q) => ({ uid: q.uid, x: q.x, y: q.y, w: q.w, h: q.h }))])
+  )
+  const findPiece = (uid) => {
+    for (const b of boards) {
+      const i = b.placements.findIndex((q) => q.uid === uid)
+      if (i >= 0) return { board: b, i }
+    }
+    return null
+  }
+  const removePiece = (uid) => {
+    const f = findPiece(uid)
+    if (!f) return false
+    f.board.placements.splice(f.i, 1)
+    const occ = occBy.get(f.board.index)
+    const j = occ.findIndex((q) => q.uid === uid)
+    if (j >= 0) occ.splice(j, 1)
+    return true
+  }
+
+  const uids = Object.keys(moves).sort()
+  for (const uid of uids) {
+    const move = moves[uid]
+    const found = findPiece(uid)
+    if (!found) continue
+    const piece = found.board.placements[found.i]
+    const cand = manualCandidate(piece, move)
+    if (!Number.isFinite(cand.x) || !Number.isFinite(cand.y)) continue
+    const target = move.board != null ? byIndex.get(Number(move.board)) : found.board
+    if (!target) continue
+    const occ = occBy.get(target.index)
+    if (target.index === found.board.index) {
+      const at = occ.findIndex((q) => q.uid === uid)
       const original = occ[at]
       occ.splice(at, 1)
-      if (!placementFits(board, cand) || occ.some((q) => overlapGap(cand, q, board.kerf))) {
+      if (!placementFits(target, cand) || occ.some((q) => overlapGap(cand, q, target.kerf))) {
         occ.push(original)
         continue
       }
-      occ.push({ uid: piece.uid, x: cand.x, y: cand.y, w: cand.w, h: cand.h })
-      piece.x = cand.x
-      piece.y = cand.y
-      piece.rotated = cand.rotated
-      piece.w = cand.w
-      piece.h = cand.h
+      occ.push({ uid, x: cand.x, y: cand.y, w: cand.w, h: cand.h })
+      Object.assign(piece, { x: cand.x, y: cand.y, w: cand.w, h: cand.h, rotated: cand.rotated })
+    } else {
+      if (!placementFits(target, cand) || occ.some((q) => overlapGap(cand, q, target.kerf))) continue
+      if (!removePiece(uid)) continue
+      Object.assign(piece, { x: cand.x, y: cand.y, w: cand.w, h: cand.h, rotated: cand.rotated })
+      target.placements.push(piece)
+      occ.push({ uid, x: cand.x, y: cand.y, w: cand.w, h: cand.h })
     }
   }
+  if (uids.length) {
+    for (const b of boards) refreshBoard(b)
+    refreshLayout(layout)
+  }
   return layout
+}
+
+export function largestFreeRect(board) {
+  const b = newBoard(board.packW, board.packH, 'free', board.thickness)
+  b.placements = board.placements
+  rebuildFree(b, board.kerf)
+  const rects = (b.free || []).slice().sort((a, c) => c.w * c.h - a.w * a.h)
+  return rects[0] || { x: 0, y: 0, w: 0, h: 0 }
+}
+
+export function tightenBoard(board) {
+  const b = newBoard(board.packW, board.packH, 'free', board.thickness)
+  b.placements = (board.placements || []).map((p) => ({ ...p }))
+  rebuildFree(b, board.kerf)
+  packTightBoard(b, board.kerf)
+  return b.placements.map((p) => ({ uid: p.uid, x: p.x, y: p.y, w: p.w, h: p.h, rotated: p.rotated }))
 }
 
 function gravityBoard(board, kerf) {
