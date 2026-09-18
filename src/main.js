@@ -2980,7 +2980,7 @@ function tabCorte() {
   const layout = layoutCache
   const s = state.settings
   const cutLabel =
-    { guillotine: 'serra / guilhotina', free: 'nesting livre', mac: 'MAC (máximo aproveitamento)', manual: 'manual' }[
+    { guillotine: 'serra / guilhotina', bbw: 'BBW (linha de corte + aproveitamento)', free: 'nesting livre', mac: 'MAC (máximo aproveitamento)', manual: 'manual' }[
       s.cutMode
     ] || 'serra / guilhotina'
   const manual = s.cutMode === 'manual'
@@ -3019,10 +3019,10 @@ function sequenceEl(board) {
   const rows = cutSequence(board)
   if (!rows.length) return null
   return h('div', { class: 'cut-sequence' }, [
-    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'mac' ? 'MAC' : board.mode === 'manual' ? 'manual' : 'livre'})`]),
+    h('h4', {}, [`Sequência de corte — chapa ${board.index} (${board.mode === 'guillotine' ? 'serra / guilhotina' : board.mode === 'bbw' ? 'BBW' : board.mode === 'mac' ? 'MAC' : board.mode === 'manual' ? 'manual' : 'livre'})`]),
     ...rows.map((row, i) =>
       h('div', { class: 'cut-row' }, [
-        h('b', {}, [`Faixa ${i + 1} · ${Math.round(row.height)} mm`]),
+        h('b', {}, [`${row.vertical ? 'Coluna' : 'Faixa'} ${i + 1} · ${Math.round(row.size)} mm`]),
         h(
           'span',
           {},

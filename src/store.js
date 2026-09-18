@@ -10,8 +10,9 @@ export const GRAIN = {
 
 export const CUT_MODES = {
   guillotine: 'Serra / guilhotina',
-  free: 'Nesting livre',
+  bbw: 'BBW — linha de corte + aproveitamento',
   mac: 'MAC — Máximo aproveitamento',
+  free: 'Nesting livre',
   manual: 'Manual — mover peças'
 }
 

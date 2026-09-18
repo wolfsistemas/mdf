@@ -289,6 +289,42 @@ function compactBoards(boards, kerf) {
   return out
 }
 
+function compactGuillotineBoards(boards, kerf) {
+  const out = boards.slice()
+  let changed = true
+  let guard = 0
+  while (changed && guard++ < 24) {
+    changed = false
+    for (let i = out.length - 1; i > 0; i--) {
+      const src = out[i]
+      const dests = []
+      for (let j = i - 1; j >= 0; j--) {
+        if (out[j].thickness === src.thickness) dests.push(out[j])
+      }
+      if (!dests.length) continue
+      const keep = []
+      const movers = [...src.placements].sort((a, b) => b.w * b.h - a.w * a.h)
+      for (const p of movers) {
+        const item = itemFromPlacement(p)
+        let moved = false
+        for (const d of dests) {
+          if (placeGuillotine(d, item, kerf)) {
+            moved = true
+            changed = true
+            break
+          }
+        }
+        if (!moved) keep.push(p)
+      }
+      src.placements = keep
+    }
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (!out[i].placements.length) out.splice(i, 1)
+    }
+  }
+  return out
+}
+
 function lexLess(a, b) {
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return a[i] < b[i]
@@ -596,7 +632,7 @@ function newBoard(W, H, mode, thickness) {
 export function nest(pieces, settings) {
   const kerf = Math.max(0, Number(settings.kerf) || 0)
   const trim = Math.max(0, Number(settings.trim) || 0)
-  const rawMode = ['mac', 'free', 'manual'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
+  const rawMode = ['mac', 'free', 'manual', 'bbw'].includes(settings.cutMode) ? settings.cutMode : 'guillotine'
   const mode = rawMode === 'free' || rawMode === 'mac' ? 'free' : 'guillotine'
   const tight = rawMode === 'mac'
   const specs = sheetSpecs(settings).filter((sp) => sp.width - 2 * trim > 0 && sp.height - 2 * trim > 0)
@@ -716,7 +752,8 @@ export function nest(pieces, settings) {
         sheetArea: sp.width * sp.height,
         wasteArea: Math.max(0, usable - used),
         efficiency: usable > 0 ? (used / usable) * 100 : 0,
-        mode: rawMode
+        mode: rawMode,
+        vertical: !!board.vertical
       }
     })
 
@@ -750,6 +787,98 @@ export function nest(pieces, settings) {
   if (canFree) policies.push({ free: true, fill: false })
   if (hasHidden) policies.push({ free: true, fill: true })
 
+  const bbwSorters = (() => {
+    const maxDim = (p) => Math.max(p.length, p.width)
+    const minDim = (p) => Math.min(p.length, p.width)
+    return [
+      areaSort,
+      (a, b) => maxDim(b) - maxDim(a) || areaSort(a, b),
+      (a, b) => minDim(b) - minDim(a) || areaSort(a, b)
+    ]
+  })()
+
+  const guillotinePass = (items, sorter, transpose) => {
+    const boards = []
+    const unplaced = []
+    const list = transpose ? items.map((p) => ({ ...p, length: p.width, width: p.length })) : items
+    for (const item of [...list].sort(sorter)) {
+      const pick = specForItem(item)
+      if (!pick) {
+        unplaced.push(item)
+        continue
+      }
+      let placed = false
+      let bestBoard = null
+      let bestCost = Infinity
+      for (const board of boards) {
+        if (board.thickness !== item.thickness) continue
+        const c = computeGuillotine(board, item, kerf)
+        if (c && c.cost < bestCost) {
+          bestCost = c.cost
+          bestBoard = board
+        }
+      }
+      if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
+      if (!placed) {
+        const W = pick.sp.width - 2 * trim
+        const H = pick.sp.height - 2 * trim
+        const board = newBoard(transpose ? H : W, transpose ? W : H, 'guillotine', item.thickness)
+        board.spec = pick.sp
+        placed = placeGuillotine(board, item, kerf)
+        if (placed) boards.push(board)
+        else unplaced.push(item)
+      }
+    }
+    const compacted = compactGuillotineBoards(boards, kerf)
+    if (transpose) {
+      for (const b of compacted) {
+        b.vertical = true
+        for (const p of b.placements) {
+          const x = p.x
+          const y = p.y
+          const w = p.w
+          const h = p.h
+          const l = p.length
+          p.x = y
+          p.y = x
+          p.w = h
+          p.h = w
+          p.length = p.width
+          p.width = l
+          p.rotated = !p.rotated
+        }
+      }
+    }
+    return { boards: compacted, unplaced }
+  }
+
+  const packBBW = () => {
+    let best = null
+    for (const pol of policies) {
+      const transformed = pieces.map((p) => (pol.free && p.hidden ? { ...p, grain: 'livre' } : p))
+      const items = expandPieces(transformed)
+      for (const baseSorter of bbwSorters) {
+        const sorter = pol.fill
+          ? (a, b) => {
+              const ha = a.hidden ? 1 : 0
+              const hb = b.hidden ? 1 : 0
+              if (ha !== hb) return ha - hb
+              return baseSorter(a, b)
+            }
+          : baseSorter
+        for (const transpose of [false, true]) {
+          const packed = guillotinePass(items, sorter, transpose)
+          const res = finish(packed.boards, packed.unplaced)
+          const score = scoreOf(res, pol)
+          if (!best || better(score, best.score)) best = { res, score }
+        }
+      }
+    }
+    return best.res
+  }
+
+  if (rawMode === 'bbw') return packBBW()
+
   let best = null
   for (const pol of policies) {
     const transformed = pieces.map((p) => (pol.free && p.hidden ? { ...p, grain: 'livre' } : p))
@@ -763,16 +892,20 @@ export function nest(pieces, settings) {
 }
 
 export function cutSequence(board) {
+  const vertical = !!board.vertical
   const rows = []
-  const ordered = [...(board.placements || [])].sort((a, b) => a.y - b.y || a.x - b.x)
+  const ordered = [...(board.placements || [])].sort(
+    vertical ? (a, b) => a.x - b.x || a.y - b.y : (a, b) => a.y - b.y || a.x - b.x
+  )
   for (const p of ordered) {
-    let row = rows.find((r) => Math.abs(r.y - p.y) < 0.5)
+    const key = vertical ? p.x : p.y
+    let row = rows.find((r) => Math.abs(r.key - key) < 0.5)
     if (!row) {
-      row = { y: p.y, height: 0, pieces: [] }
+      row = { key, size: 0, pieces: [], vertical }
       rows.push(row)
     }
     row.pieces.push(p)
-    row.height = Math.max(row.height, p.h)
+    row.size = Math.max(row.size, vertical ? p.w : p.h)
   }
   return rows
 }

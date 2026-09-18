@@ -43,7 +43,8 @@ Abra o endereco que o Vite mostrar (padrao `http://localhost:5173`).
 - Tamponamento de faces aparentes (laterais, topo e base; painel inteiro ou sarrafo)
 - Tamponamento de tampo de mesa: reforco (dobrar/engrossar o tampo) ou borda de 30/50/100 mm, no tampo e nas laterais/pes
 - Gaveteiro suspenso com fechadura configuravel
-- Plano de corte 2D em 4 modos: serra/guilhotina (padrao), nesting livre, MAC (maximo aproveitamento) e manual (arrastar pecas na chapa)
+- Plano de corte 2D em 5 modos: serra/guilhotina (padrao), BBW, nesting livre, MAC (maximo aproveitamento) e manual (arrastar pecas na chapa)
+- BBW (melhor dos dois mundos): mantem as linhas de corte da serra (faixas horizontais ou colunas verticais) mas testa varias ordens de encaixe e compacta as chapas, chegando perto do MAC sem perder a sequencia de corte
 - No modo manual da para arrastar cada peca: encaixa nas bordas e no kerf da serra, fica vermelho em posicao invalida, com Desfazer e Limpar ajustes; pecas de aproveitamento (sem veio) giram 90 graus no botao ↻ e as ajustadas ganham borda dourada
 - No modo manual da para levar uma peca para outra chapa arrastando ate ela; cada chapa mostra a maior sobra continua e tem o botao **Encaixar no canto** (reenquadra so aquela chapa); clique numa peca para selecionar (Shift/Ctrl soma varias) e use os botoes de alinhar (esq./dir./topo/base) e distribuir (H/V)
 - Pecas ocultas (fundos, caixotes de gaveta e tamponamento) entram como aproveitamento: podem girar e sao posicionadas por ultimo, para preencher sobras antes de abrir outra chapa (o app testa variacoes e usa a de menor numero de chapas)
