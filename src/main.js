@@ -610,6 +610,18 @@ function mobileNav() {
     )
   )
 }
+function sideNav() {
+  const item = (id, label) =>
+    h('button', { class: 'snav' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) }, [label])
+  return h('aside', { class: 'sidebar', 'aria-label': 'Navegação' }, [
+    h('div', { class: 'brand' }, [h('span', { class: 'mark' }, ['MDF ATELIER']), h('h1', {}, ['MDF Atelier'])]),
+    h('nav', { class: 'side-nav' }, [
+      ...tabsDef().map(([id, label]) => item(id, label)),
+      h('div', { class: 'side-sep' }),
+      item('config', 'Configurações')
+    ])
+  ])
+}
 
 /* ============================== nuvem (Supabase) ============================== */
 
@@ -3303,6 +3315,19 @@ function tabConta() {
         'O WhatsApp aparece no documento com um QR code: ao escanear, o cliente já abre a conversa com o nome e o valor daquele orçamento.'
       ])
     ]),
+    h('div', { class: 'row mobile-only', style: 'margin-top:2px' }, [
+      h('button', { class: 'btn small ghost', onClick: () => selectTab('config') }, ['Configurações do app'])
+    ])
+  ])
+}
+
+function tabConfig() {
+  const s = state.settings
+  const set = settingsPatch
+  return h('div', {}, [
+    h('div', { class: 'row mobile-only', style: 'margin-bottom:4px' }, [
+      h('button', { class: 'btn small ghost', onClick: () => selectTab('conta') }, ['Conta e empresa'])
+    ]),
     h('div', { class: 'card' }, [
       h('h2', {}, ['Venda padrão']),
       h('div', { class: 'row' }, [
@@ -3386,7 +3411,7 @@ function tabsDef() {
 }
 
 function topActions(p) {
-  if (tab === 'projetos' || tab === 'conta' || !p) return []
+  if (tab === 'projetos' || tab === 'conta' || tab === 'config' || !p) return []
   const btns = [h('button', { class: 'btn', title: 'Baixar CSV com todas as peças do projeto', onClick: () => exportCsv(p, piecesCache) }, ['CSV peças'])]
   btns.push(h('button', { class: 'btn', title: 'Planilha para importar no CorteCloud', onClick: () => exportCorteCloud(p, piecesCache, state.settings) }, ['CorteCloud']))
   if (tab === 'orcamento') {
@@ -3457,25 +3482,29 @@ function render() {
       ? tabProjetos()
       : tab === 'conta'
         ? tabConta()
-        : mobile && tab === 'orcamento' && !printFull
-          ? mobileOrcamento()
-          : tab === 'orcamento'
-            ? tabOrcamento()
-            : tab === 'custos'
-              ? tabCustos()
-              : tab === 'pecas'
-                ? tabPecas()
-                : tab === 'corte'
-                  ? tabCorte()
-                  : tabProjetos()
+        : tab === 'config'
+          ? tabConfig()
+          : mobile && tab === 'orcamento' && !printFull
+            ? mobileOrcamento()
+            : tab === 'orcamento'
+              ? tabOrcamento()
+              : tab === 'custos'
+                ? tabCustos()
+                : tab === 'pecas'
+                  ? tabPecas()
+                  : tab === 'corte'
+                    ? tabCorte()
+                    : tabProjetos()
 
   const title =
-    tab === 'projetos' || tab === 'conta' || !p
+    tab === 'projetos' || tab === 'conta' || tab === 'config' || !p
       ? [
           isLimitedPlan(currentPlan())
             ? h('a', { class: 'top-home', href: '#/' }, [h('strong', {}, ['MDF Atelier'])])
             : h('strong', {}, ['MDF Atelier']),
-          h('span', {}, [tab === 'conta' ? 'Configuração da conta' : 'Seus orçamentos'])
+          h('span', {}, [
+            tab === 'conta' ? 'Configuração da conta' : tab === 'config' ? 'Configurações do app' : 'Seus orçamentos'
+          ])
         ]
       : [
           h('strong', {}, [p.name]),
@@ -3484,12 +3513,10 @@ function render() {
 
   root.append(
     h('div', { class: 'app' }, [
+      sideNav(),
       h('section', { class: 'main' }, [
         h('div', { class: 'topbar' }, [
           h('div', { class: 'top-title' }, title),
-          h('div', { class: 'tabs', role: 'tablist' }, tabsDef().map(([id, label]) =>
-            h('button', { class: 'tab' + (tab === id ? ' active' : ''), onClick: () => selectTab(id) }, [label])
-          )),
           h('div', { class: 'actions' }, topActions(p)),
           accountMenu()
         ]),
@@ -3556,7 +3583,7 @@ const TOUR_KEY = 'mdf-atelier-tour-v1'
 const TOUR_STEPS = [
   {
     title: 'Seus orçamentos',
-    body: 'A tela inicial lista os projetos. Toque em um para abrir, ou crie um novo. Logo, WhatsApp e margem padrão ficam em Conta.'
+    body: 'A tela inicial lista os projetos. Toque em um para abrir, ou crie um novo. Logo e WhatsApp ficam em Conta; margem, chapa e fita em Configurações.'
   },
   {
     title: 'Monte o móvel em 4 passos',

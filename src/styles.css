@@ -51,6 +51,47 @@ textarea {
   display: none;
 }
 
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 12px 16px;
+  overflow: auto;
+  flex: 1;
+}
+
+.snav {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.snav:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.snav.active {
+  background: var(--gold);
+  color: #1a140f;
+  font-weight: 600;
+}
+
+.side-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 10px 4px;
+}
+
 .brand {
   padding: 22px 20px 12px;
 }
@@ -2640,10 +2681,10 @@ td strong.gold {
   }
 }
 
-/* Restaura o comportamento responsivo do layout app/sidebar (1100px) */
-@media (max-width: 1100px) {
+/* No mobile o layout vira coluna única (a sidebar some) */
+@media (max-width: 900px) {
   .app {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
   }
   .tabs {
     justify-content: flex-start;
@@ -3513,4 +3554,41 @@ td strong.gold {
   background: #fbf8f2;
   color: #241d15;
   border-color: #d9ccb6;
+}
+
+/* =====================================================================
+   Sidebar fixa (somente desktop > 900px)
+   ===================================================================== */
+
+.mobile-only {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .app {
+    grid-template-columns: 252px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    background: var(--bg-2);
+  }
+
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .topbar .tabs {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .mobile-only {
+    display: flex;
+  }
 }
