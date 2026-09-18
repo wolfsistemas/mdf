@@ -97,15 +97,18 @@ para `main` ou manualmente na aba Actions). Primeira vez, no GitHub:
    **Source: GitHub Actions** (o workflow cuida do resto).
 2. Suba o codigo para `main` (merge do branch de trabalho via Pull Request).
 3. Apos o workflow concluir, o app aparece em
-   `https://wolfsistemas.github.io/mdf/`.
+   `https://wolfsaas.com.br/mdf/` (o dominio antigo
+   `https://wolfsistemas.github.io/mdf/` redireciona para la).
 
 Importante: nesse modo os dados continuam no **localStorage** do navegador
 (dados por maquina, nada vai para um servidor).
 
 ## Landing page (site de vendas)
 
-A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, planos e FAQ; o
-app fica em `/mdf/#/app` (botao "Abrir o app" / "Testar gratis").
+A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, plano de corte,
+ajuste manual, planos e FAQ; o app fica em `/mdf/#/app` (botao "Abrir o app" /
+"Testar gratis"). O hero traz um carrossel com telas do app desenhadas em
+HTML/CSS (sem imagens externas).
 
 Textos, precos e planos ficam em `src/landing.js` e o visual em
 `src/landing.css`. Termos em `#/termos` e privacidade em `#/privacidade`.

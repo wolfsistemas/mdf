@@ -3616,7 +3616,7 @@ function registerPwa() {
 let appStarted = false
 let currentScreen = null
 
-const SITE_ORIGIN = 'https://wolfsistemas.github.io'
+const SITE_ORIGIN = 'https://wolfsaas.com.br'
 const BASE_PATH = import.meta.env.BASE_URL || '/'
 function siteUrl(hash) {
   return SITE_ORIGIN + BASE_PATH.replace(/\/$/, '/') + (hash || '')

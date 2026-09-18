@@ -1587,16 +1587,135 @@ body.landing-mode {
 }
 
 @media (max-width: 640px) {
+  .lshots {
+    margin-left: -18px;
+    margin-right: -18px;
+  }
+
+  .lshot-frame {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
   .lshot-stage {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 1 / 1;
+  }
+
+  .lshot-cap {
+    padding: 11px 16px;
+  }
+
+  .lshot-cap strong {
+    font-size: 14px;
   }
 
   .lshot-cap span {
     display: none;
   }
 
+  .lshot-dots {
+    margin-top: 16px;
+  }
+
+  .lshot-dot {
+    width: 9px;
+    height: 9px;
+  }
+
   .mk {
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 84px 1fr;
+  }
+
+  .mk-side {
+    padding: 10px 9px;
+    gap: 11px;
+  }
+
+  .mk-brand {
+    font-size: 9px;
+  }
+
+  .mk-nav span {
+    font-size: 9px;
+    padding: 5px 7px;
+  }
+
+  .mk-main {
+    padding: 12px 13px;
+    gap: 10px;
+  }
+
+  .mk-title {
+    font-size: 12px;
+  }
+
+  .mk-actions span,
+  .mk-modes span {
+    font-size: 9px;
+    padding: 4px 8px;
+  }
+
+  .mk-field {
+    padding: 5px 7px;
+  }
+
+  .mk-field label {
+    font-size: 8px;
+  }
+
+  .mk-field b {
+    font-size: 11px;
+  }
+
+  .mk-chips span,
+  .mk-seq span,
+  .mk-tools span {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .mk-pc,
+  .mk-hid,
+  .mk-free,
+  .mk-ghost {
+    font-size: 9px;
+  }
+
+  .mk-stats {
+    width: 70px;
+  }
+
+  .mk-stats b {
+    font-size: 13px;
+  }
+
+  .mk-stats span {
+    font-size: 8px;
+  }
+
+  .mk-table {
+    font-size: 10px;
+  }
+
+  .mk-table th {
+    font-size: 8px;
+  }
+
+  .mk-table td {
+    padding: 6px 5px;
+  }
+
+  .mk-totals b {
+    font-size: 12px;
+  }
+
+  .mk-totals span {
+    font-size: 8px;
+  }
+
+  .mk-paper .lpage {
+    max-width: none;
   }
 
   .lsec-sub {
