@@ -1578,6 +1578,16 @@ body.landing-mode {
     gap: 13px;
     font-size: 13px;
   }
+
+  .lhero-visual {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+  }
+
+  .lshots .lshot-stage {
+    aspect-ratio: 16 / 9;
+  }
 }
 
 @media (max-width: 760px) {
