@@ -2639,8 +2639,6 @@ function attachManualDrag(board, box, piece, scale) {
         rotated: !!piece.rotated
       }
       persist({ silent: true })
-      recalc()
-      render()
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -2655,8 +2653,6 @@ function undoManual() {
   if (!manualUndo.length) return
   p.manual = JSON.parse(manualUndo.pop().data)
   persist({ silent: true })
-  recalc()
-  render()
 }
 
 function clearManual() {
@@ -2665,8 +2661,6 @@ function clearManual() {
   pushManualUndo()
   p.manual = {}
   persist({ silent: true })
-  recalc()
-  render()
 }
 
 function canRotatePiece(piece) {
@@ -2702,8 +2696,6 @@ function rotateManual(board, piece) {
     if (!map) return
     map[piece.uid] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, rotated: next }
     persist({ silent: true })
-    recalc()
-    render()
     return
   }
   showToast('Não há espaço livre para girar aqui. Mova a peça primeiro.', 'info', 4000)
