@@ -36,7 +36,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const BUILD = 'fn-2026-09-14c'
+const BUILD = 'fn-2026-09-18-admin'
 const PLAN_DAYS = 30
 const DEFAULT_LOG_EMAIL = 'wolfsaasbr@gmail.com'
 const PLAN_DEFS: Record<string, { reason: string; centsKey: string; fallbackCents: number }> = {
@@ -118,10 +118,32 @@ function planFromRef(ref: unknown) {
   return PLAN_DEFS[parts[2]] ? parts[2] : ''
 }
 
+/* Config global dos planos (editada no super admin). Vem de public.plan_config.
+   Cache curto para não consultar a cada request. Se vazia, usa env/fallback. */
+let PLAN_CFG: any = {}
+let PLAN_CFG_AT = 0
+async function loadPlanCfg(force = false) {
+  if (!force && PLAN_CFG_AT && Date.now() - PLAN_CFG_AT < 30000) return PLAN_CFG
+  try {
+    const { data } = await sb.from('plan_config').select('data').eq('id', 1).maybeSingle()
+    PLAN_CFG = (data && data.data) || {}
+  } catch {
+    PLAN_CFG = PLAN_CFG || {}
+  }
+  PLAN_CFG_AT = Date.now()
+  return PLAN_CFG
+}
+
+function cfgCents(kind: 'plans' | 'once', id: string) {
+  const group = PLAN_CFG && PLAN_CFG[kind]
+  const cents = group && group[id] ? Number(group[id].cents) : 0
+  return cents > 0 ? cents : 0
+}
+
 function planAmount(plan: string) {
   const def = PLAN_DEFS[plan]
   if (!def) return 0
-  let cents = Number(env(def.centsKey) || def.fallbackCents)
+  let cents = cfgCents('plans', plan) || Number(env(def.centsKey) || def.fallbackCents)
   if (!(cents > 0)) cents = def.fallbackCents
   return cents / 100
 }
@@ -129,9 +151,16 @@ function planAmount(plan: string) {
 function onceCents(interval: string) {
   const def = ONCE_DEFS[interval]
   if (!def) return 0
-  let cents = Number(env(def.centsKey) || def.fallbackCents)
+  let cents = cfgCents('once', interval) || Number(env(def.centsKey) || def.fallbackCents)
   if (!(cents > 0)) cents = def.fallbackCents
   return Math.round(cents)
+}
+
+function onceDays(interval: string) {
+  const def = ONCE_DEFS[interval]
+  if (!def) return 0
+  const days = PLAN_CFG && PLAN_CFG.once && PLAN_CFG.once[interval] ? Number(PLAN_CFG.once[interval].days) : 0
+  return days > 0 ? Math.round(days) : def.days
 }
 
 function mpCheckoutUrl(obj: any) {
@@ -617,14 +646,14 @@ async function handleInfinityCheckout(userId: string, body: any) {
     order_nsu: orderNsu,
     user_id: userId,
     interval,
-    days: def.days,
+    days: onceDays(interval),
     amount_cents: cents
   })
   if (error) {
     await notify('Falha ao gravar pedido avulso (user ' + userId + ')', error.message)
     return { ok: false, error: 'Não deu para registrar o pedido. Tente de novo.' }
   }
-  return { ok: true, url: String(data.url), order_nsu: orderNsu, interval, days: def.days }
+  return { ok: true, url: String(data.url), order_nsu: orderNsu, interval, days: onceDays(interval) }
 }
 
 async function handleInfinityConfirm(userId: string, body: any) {
@@ -901,6 +930,208 @@ const USER_ACTIONS = [
   'sync_subscription'
 ]
 
+/* ============================== super admin ============================== */
+
+const ADMIN_ACTIONS = [
+  'admin_stats',
+  'admin_list',
+  'admin_set_plan',
+  'admin_block',
+  'admin_note',
+  'admin_audit',
+  'admin_plan_config_get',
+  'admin_plan_config_set'
+]
+
+async function requireAdmin(req: Request): Promise<{ id: string; email: string } | null> {
+  const header = req.headers.get('Authorization') || ''
+  const token = header.replace(/^Bearer\s+/i, '').trim()
+  if (!token || (ANON_KEY && token === ANON_KEY)) return null
+  try {
+    const { data, error } = await sb.auth.getUser(token)
+    if (error || !data || !data.user) return null
+    const { data: adm } = await sb.from('admins').select('user_id').eq('user_id', data.user.id).maybeSingle()
+    if (!adm) return null
+    return { id: data.user.id, email: data.user.email || '' }
+  } catch {
+    return null
+  }
+}
+
+async function emailOf(userId: string) {
+  if (!userId) return ''
+  try {
+    const { data } = await sb.auth.admin.getUserById(userId)
+    return String((data && data.user && data.user.email) || '')
+  } catch {
+    return ''
+  }
+}
+
+async function writeAudit(admin: { id: string; email: string } | null, targetId: string, action: string, before: any, after: any) {
+  try {
+    await sb.from('admin_audit').insert({
+      admin_id: admin ? admin.id : null,
+      admin_email: admin ? admin.email : '',
+      target_id: targetId || null,
+      target_email: targetId ? await emailOf(targetId) : '',
+      action,
+      before: before ?? null,
+      after: after ?? null
+    })
+  } catch (err) {
+    console.error('audit', String((err && (err as any).message) || err))
+  }
+}
+
+function planExpired(exp: unknown, now: number) {
+  if (!exp) return false
+  const t = new Date(String(exp)).getTime()
+  return Number.isFinite(t) && t < now
+}
+
+function effectivePlanRow(plan: unknown, exp: unknown, now: number) {
+  const id = plan === 'premium' ? 'ultra' : String(plan || 'gratis')
+  if (id !== 'pro' && id !== 'ultra') return 'gratis'
+  if (planExpired(exp, now)) return 'gratis'
+  return id
+}
+
+async function handleAdminStats() {
+  const { data, error } = await sb.from('profiles').select('plan,plan_expires_at,is_blocked')
+  if (error) throw error
+  const now = Date.now()
+  const stats = { total: 0, gratis: 0, pro: 0, ultra: 0, expirados: 0, bloqueados: 0 }
+  for (const p of (data as any[]) || []) {
+    stats.total++
+    if (p.is_blocked) stats.bloqueados++
+    const eff = effectivePlanRow(p.plan, p.plan_expires_at, now)
+    if (eff === 'pro') stats.pro++
+    else if (eff === 'ultra') stats.ultra++
+    else {
+      stats.gratis++
+      if ((p.plan === 'pro' || p.plan === 'ultra') && planExpired(p.plan_expires_at, now)) stats.expirados++
+    }
+  }
+  return { ok: true, stats }
+}
+
+async function handleAdminList(body: any) {
+  const page = Math.max(1, Number(body.page || 1))
+  const perPage = Math.min(200, Math.max(1, Number(body.per_page || 100)))
+  const { data, error } = await sb.auth.admin.listUsers({ page, perPage })
+  if (error) throw error
+  const users = ((data && (data as any).users) || []) as any[]
+  const ids = users.map((u) => u.id)
+  let profs: any[] = []
+  let projs: any[] = []
+  if (ids.length) {
+    const r1 = await sb
+      .from('profiles')
+      .select('id,plan,plan_expires_at,mp_subscription_status,is_blocked,admin_note,plan_source,created_at,settings')
+      .in('id', ids)
+    profs = (r1.data as any[]) || []
+    const r2 = await sb.from('projects').select('user_id').in('user_id', ids)
+    projs = (r2.data as any[]) || []
+  }
+  const counts: Record<string, number> = {}
+  for (const r of projs) counts[r.user_id] = (counts[r.user_id] || 0) + 1
+  const byId: Record<string, any> = {}
+  for (const p of profs) byId[p.id] = p
+  const rows = users.map((u) => {
+    const p = byId[u.id] || {}
+    const s = p.settings || {}
+    const now = Date.now()
+    return {
+      id: u.id,
+      email: u.email || '',
+      created_at: u.created_at || '',
+      last_sign_in_at: u.last_sign_in_at || '',
+      plan: p.plan || 'gratis',
+      plan_expires_at: p.plan_expires_at || '',
+      effective: effectivePlanRow(p.plan, p.plan_expires_at, now),
+      status: p.mp_subscription_status || '',
+      blocked: !!p.is_blocked,
+      note: p.admin_note || '',
+      source: p.plan_source || '',
+      projects: counts[u.id] || 0,
+      shop: s.shopName || ''
+    }
+  })
+  return { ok: true, page, per_page: perPage, total: (data && (data as any).total) || rows.length, rows }
+}
+
+async function handleAdminSetPlan(admin: { id: string; email: string } | null, body: any) {
+  const userId = String(body.user_id || '')
+  if (!uuidOk(userId)) return { ok: false, error: 'user_id inválido' }
+  const plan = ['gratis', 'pro', 'ultra'].indexOf(String(body.plan)) !== -1 ? String(body.plan) : 'gratis'
+  let exp: string | null = null
+  if (plan !== 'gratis' && body.plan_expires_at) {
+    const d = new Date(String(body.plan_expires_at))
+    if (!isNaN(d.getTime())) exp = d.toISOString()
+  }
+  const source = String(body.source || 'admin').slice(0, 40)
+  const { data: before } = await sb
+    .from('profiles')
+    .select('plan,plan_expires_at,plan_source')
+    .eq('id', userId)
+    .maybeSingle()
+  const { error } = await sb
+    .from('profiles')
+    .update({ plan, plan_expires_at: exp, plan_source: source })
+    .eq('id', userId)
+  if (error) throw error
+  await writeAudit(admin, userId, 'set_plan', before, { plan, plan_expires_at: exp, source })
+  return { ok: true, plan, plan_expires_at: exp }
+}
+
+async function handleAdminBlock(admin: { id: string; email: string } | null, body: any) {
+  const userId = String(body.user_id || '')
+  if (!uuidOk(userId)) return { ok: false, error: 'user_id inválido' }
+  const blocked = !!body.blocked
+  const { data: before } = await sb.from('profiles').select('is_blocked').eq('id', userId).maybeSingle()
+  const { error } = await sb.from('profiles').update({ is_blocked: blocked }).eq('id', userId)
+  if (error) throw error
+  await writeAudit(admin, userId, blocked ? 'block' : 'unblock', before, { is_blocked: blocked })
+  return { ok: true, blocked }
+}
+
+async function handleAdminNote(admin: { id: string; email: string } | null, body: any) {
+  const userId = String(body.user_id || '')
+  if (!uuidOk(userId)) return { ok: false, error: 'user_id inválido' }
+  const note = String(body.note || '').slice(0, 500)
+  const { error } = await sb.from('profiles').update({ admin_note: note }).eq('id', userId)
+  if (error) throw error
+  await writeAudit(admin, userId, 'note', null, { admin_note: note })
+  return { ok: true, note }
+}
+
+async function handleAdminAudit(body: any) {
+  const limit = Math.min(200, Math.max(1, Number(body.limit || 50)))
+  const { data, error } = await sb.from('admin_audit').select('*').order('at', { ascending: false }).limit(limit)
+  if (error) throw error
+  return { ok: true, rows: data || [] }
+}
+
+async function handleAdminPlanConfigGet() {
+  const { data, error } = await sb.from('plan_config').select('data,updated_at').eq('id', 1).maybeSingle()
+  if (error) throw error
+  return { ok: true, data: (data && (data as any).data) || {}, updated_at: (data && (data as any).updated_at) || '' }
+}
+
+async function handleAdminPlanConfigSet(admin: { id: string; email: string } | null, body: any) {
+  const incoming = body.data && typeof body.data === 'object' ? body.data : {}
+  const { data: before } = await sb.from('plan_config').select('data').eq('id', 1).maybeSingle()
+  const { error } = await sb
+    .from('plan_config')
+    .update({ data: incoming, updated_at: new Date().toISOString() })
+    .eq('id', 1)
+  if (error) throw error
+  await writeAudit(admin, '', 'plan_config', (before && (before as any).data) || {}, incoming)
+  await loadPlanCfg(true)
+  return { ok: true, data: incoming }
+}
+
 /* ============================== handler ============================== */
 
 Deno.serve(async (req) => {
@@ -911,7 +1142,7 @@ Deno.serve(async (req) => {
       service: 'mdf-atelier-billing',
       build: BUILD,
       provider: provider(),
-      routes: [...USER_ACTIONS, 'webhook']
+      routes: [...USER_ACTIONS, ...ADMIN_ACTIONS, 'webhook']
     })
   }
   if (req.method !== 'POST') return json({ ok: false, error: 'método não permitido' }, 405)
@@ -943,9 +1174,23 @@ Deno.serve(async (req) => {
     keys: Object.keys(body).slice(0, 25)
   }
 
+  await loadPlanCfg()
+
   try {
     let result: any
-    if (USER_ACTIONS.indexOf(action) !== -1) {
+    if (ADMIN_ACTIONS.indexOf(action) !== -1) {
+      log.action = action
+      const admin = await requireAdmin(req)
+      if (!admin) return json({ ok: false, error: 'Acesso restrito.' }, 403)
+      if (action === 'admin_stats') result = await handleAdminStats()
+      else if (action === 'admin_list') result = await handleAdminList(body)
+      else if (action === 'admin_set_plan') result = await handleAdminSetPlan(admin, body)
+      else if (action === 'admin_block') result = await handleAdminBlock(admin, body)
+      else if (action === 'admin_note') result = await handleAdminNote(admin, body)
+      else if (action === 'admin_plan_config_get') result = await handleAdminPlanConfigGet()
+      else if (action === 'admin_plan_config_set') result = await handleAdminPlanConfigSet(admin, body)
+      else result = await handleAdminAudit(body)
+    } else if (USER_ACTIONS.indexOf(action) !== -1) {
       log.action = action
       const userId = await userFromJwt(req, body)
       if (!userId) return json({ ok: false, error: 'Sessão expirada. Entre de novo no app.' }, 401)

@@ -1,4 +1,12 @@
 import './landing.css'
+import { PLANS, ONCE_PLANS, freeProjectLimit } from './billing.js'
+
+function priceParts(label) {
+  const raw = String(label || '').trim()
+  const i = raw.indexOf('/')
+  if (i === -1) return { main: raw, suffix: '' }
+  return { main: raw.slice(0, i).trim(), suffix: raw.slice(i + 1).trim() }
+}
 
 const CABINET_SVG = `
 <svg viewBox="0 0 220 260" xmlns="http://www.w3.org/2000/svg">
@@ -252,6 +260,11 @@ const CARDS = [
 ]
 
 export function landingHTML() {
+  const pro = priceParts(PLANS.pro.priceLabel)
+  const free = priceParts(PLANS.gratis.priceLabel)
+  const limit = freeProjectLimit()
+  const once1 = ONCE_PLANS['1m'].priceLabel
+  const once3 = ONCE_PLANS['3m'].priceLabel
   return `
 <div class="landing">
   <header class="lnav">
@@ -377,9 +390,9 @@ export function landingHTML() {
       <div class="lplans">
         <div class="lplan">
           <h3>Grátis</h3>
-          <p class="lprice">R$ 0<span>/mês</span></p>
+          <p class="lprice">${free.main}<span>/${free.suffix || 'mês'}</span></p>
           <ul>
-            <li>Até 3 orçamentos ativos</li>
+            <li>Até ${limit} orçamentos ativos</li>
             <li>Catálogo com 52 móveis + peças avulsas</li>
             <li>Plano de corte em 5 modos, com veio e fita</li>
             <li>Custo, margem e orçamento em PDF</li>
@@ -391,18 +404,18 @@ export function landingHTML() {
         </div>
         <div class="lplan hot">
           <h3>Pro</h3>
-          <p class="lprice">R$ 49<span>/mês</span></p>
+          <p class="lprice">${pro.main}<span>/${pro.suffix || 'mês'}</span></p>
           <ul>
             <li>Orçamentos ilimitados</li>
             <li>Logo da sua marcenaria no documento</li>
             <li>Nome, WhatsApp e QR no orçamento</li>
-            <li>Tudo do Grátis, sem o teto de 3</li>
+            <li>Tudo do Grátis, sem o teto de ${limit}</li>
             <li>Cancele quando quiser na aba Conta</li>
           </ul>
           <a class="btn-l primary full" href="#/app?upgrade=pro">Quero o Pro</a>
         </div>
       </div>
-      <p class="lpricing-note">Assinatura mensal com renovação automática ou pagamento único de 1 mês (R$ 49) ou 3 meses (R$ 129), por PIX ou cartão à vista. A assinatura pode ser cancelada quando quiser na aba Conta; o período já pago segue até o vencimento. O plano Grátis não precisa de cartão.</p>
+      <p class="lpricing-note">Assinatura mensal com renovação automática ou pagamento único de 1 mês (${once1}) ou 3 meses (${once3}), por PIX ou cartão à vista. A assinatura pode ser cancelada quando quiser na aba Conta; o período já pago segue até o vencimento. O plano Grátis não precisa de cartão.</p>
     </div>
   </section>
 
@@ -487,12 +500,14 @@ function legalShell(title, body) {
 }
 
 export function termosHTML() {
+  const pro = priceParts(PLANS.pro.priceLabel)
+  const limit = freeProjectLimit()
   return legalShell(
     'Termos de uso',
     `
       <p>O MDF Atelier é um software para marcenarias calcularem orçamentos e planos de corte. Ao usar o app, você concorda com estes termos.</p>
       <h2>Conta e planos</h2>
-      <p>O plano Grátis permite até 3 orçamentos ativos e usa a marca MDF Atelier no documento. O plano Pro (R$ 49/mês) libera orçamentos ilimitados e a logo da sua marcenaria. A cobrança é feita por um processador de pagamento seguro, no próprio checkout dele. O cartão nunca é digitado neste site.</p>
+      <p>O plano Grátis permite até ${limit} orçamentos ativos e usa a marca MDF Atelier no documento. O plano Pro (${pro.main}${pro.suffix ? '/' + pro.suffix : '/mês'}) libera orçamentos ilimitados e a logo da sua marcenaria. A cobrança é feita por um processador de pagamento seguro, no próprio checkout dele. O cartão nunca é digitado neste site.</p>
       <h2>Cancelamento</h2>
       <p>Você pode cancelar a assinatura a qualquer momento na aba Conta do app. O cancelamento impede a próxima cobrança. O período já pago continua válido até a data de vencimento; depois a conta volta ao Grátis.</p>
       <h2>Uso aceitável</h2>

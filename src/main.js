@@ -41,13 +41,16 @@ import {
   signUp as cloudSignUp,
   signOut as cloudSignOut,
   pullState,
-  schedulePush
+  schedulePush,
+  rpc
 } from './cloud.js'
 import { landingHTML, termosHTML, privacidadeHTML, initLanding, stopLanding } from './landing.js'
+import { adminHTML, initAdmin, ADMIN_EMAIL } from './admin.js'
 import {
-  FREE_PROJECT_LIMIT,
   PLANS,
   ONCE_PLANS,
+  freeProjectLimit,
+  loadPlanConfig,
   planLabel,
   isLimitedPlan,
   effectivePlan,
@@ -81,6 +84,7 @@ let editorStep = 0
 let listFocusId = null
 let printFull = false
 let authUser = null
+let isAdminUser = false
 let syncTimer = null
 let lastSyncAt = 0
 let lastSyncOk = true
@@ -634,9 +638,9 @@ function planLimited() {
 }
 function guardProjectSlots() {
   if (!planLimited()) return true
-  if (state.projects.length >= FREE_PROJECT_LIMIT) {
+  if (state.projects.length >= freeProjectLimit()) {
     openUpgrade(
-      `Você está no plano Grátis (limite de ${FREE_PROJECT_LIMIT} orçamentos). No Pro os orçamentos são ilimitados.`
+      `Você está no plano Grátis (limite de ${freeProjectLimit()} orçamentos). No Pro os orçamentos são ilimitados.`
     )
     return false
   }
@@ -660,6 +664,7 @@ function accountMenu() {
         h('strong', {}, [planLabel(plan)]),
         h('span', {}, [authUser.email || syncLabel()])
       ]),
+      isAdminUser ? h('a', { class: 'btn small ghost', href: '#/admin' }, ['Admin']) : null,
       isLimitedPlan(plan)
         ? h('a', { class: 'btn small ghost', href: '#/' }, ['Site'])
         : null,
@@ -757,6 +762,15 @@ async function syncAfterLogin() {
   } catch (err) {
     lastSyncOk = false
     console.warn('sync', err)
+  }
+  try {
+    isAdminUser = await rpc('am_i_admin')
+  } catch {
+    isAdminUser = false
+  }
+  if (isAdminUser && location.hash !== '#/admin') {
+    location.hash = '#/admin'
+    return
   }
   render()
 }
@@ -901,7 +915,8 @@ function authModal() {
     msgEl.className = 'auth-msg' + (kind ? ' ' + kind : '')
   }
   const run = async (mode) => {
-    const emailV = email.value.trim()
+    const raw = email.value.trim()
+    const emailV = raw.toLowerCase() === 'admin' ? ADMIN_EMAIL : raw
     const passV = pass.value
     if (!emailV || !passV) return setMsg('Preencha e-mail e senha.', 'err')
     setMsg(mode === 'in' ? 'Entrando…' : 'Criando conta…')
@@ -1176,7 +1191,7 @@ function tabProjetos() {
         h('h2', {}, ['Orçamentos']),
         h('p', { class: 'help' }, [
           isLimitedPlan(plan)
-            ? `Plano ${planLabel(plan)} · ${state.projects.length} de ${FREE_PROJECT_LIMIT} orçamentos.`
+            ? `Plano ${planLabel(plan)} · ${state.projects.length} de ${freeProjectLimit()} orçamentos.`
             : `Plano ${planLabel(plan)} · ${state.projects.length} orçamento(s).`
         ])
       ]),
@@ -3668,6 +3683,11 @@ const SCREEN_META = {
     title: 'Privacidade — MDF Atelier',
     desc: 'Como o MDF Atelier trata seus dados: o que fica no aparelho, o que vai para a nuvem e como pedir exclusão.',
     url: siteUrl('#/privacidade')
+  },
+  admin: {
+    title: 'Super admin — MDF Atelier',
+    desc: 'Painel interno de controle de planos.',
+    url: siteUrl('#/admin')
   }
 }
 
@@ -3693,10 +3713,16 @@ function setScreenMeta(screen) {
   if (desc) desc.setAttribute('content', m.desc)
   const canonical = document.head.querySelector('link[rel="canonical"]')
   if (canonical) canonical.setAttribute('href', m.url)
+  if (screen === 'admin') setMeta('name', 'robots', 'noindex, nofollow')
+  else {
+    const robots = document.head.querySelector('meta[name="robots"]')
+    if (robots) robots.setAttribute('content', 'index, follow')
+  }
 }
 
 function desiredScreen() {
   const hash = location.hash || ''
+  if (hash.startsWith('#/admin')) return 'admin'
   if (hash.startsWith('#/app') || hashHasPlanOk()) return 'app'
   if (hash.startsWith('#/termos')) return 'termos'
   if (hash.startsWith('#/privacidade')) return 'privacidade'
@@ -3706,7 +3732,13 @@ function desiredScreen() {
 function landingAnchor() {
   const hash = location.hash || ''
   if (!hash || hash === '#' || hash === '#/') return ''
-  if (hash.startsWith('#/app') || hash.startsWith('#/termos') || hash.startsWith('#/privacidade')) return ''
+  if (
+    hash.startsWith('#/app') ||
+    hash.startsWith('#/admin') ||
+    hash.startsWith('#/termos') ||
+    hash.startsWith('#/privacidade')
+  )
+    return ''
   return hash.replace(/^#\/?/, '')
 }
 
@@ -3769,6 +3801,13 @@ function showScreen() {
       consumePlanReturn()
       consumeInfinityReturn()
     }
+  } else if (desired === 'admin') {
+    stopLanding()
+    document.body.classList.remove('landing-mode')
+    root.innerHTML = ''
+    root.insertAdjacentHTML('afterbegin', adminHTML())
+    window.scrollTo(0, 0)
+    initAdmin()
   } else {
     document.body.classList.add('landing-mode')
     root.innerHTML = ''
@@ -3801,4 +3840,4 @@ window.addEventListener('resize', () => {
 })
 window.addEventListener('hashchange', showScreen)
 
-showScreen()
+Promise.race([loadPlanConfig(), new Promise((r) => setTimeout(r, 1500))]).finally(showScreen)

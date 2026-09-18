@@ -202,3 +202,71 @@ export function syncSubscription(userId) {
 export function cancelSubscription(userId) {
   return billingPost('cancel_subscription', { user_id: userId })
 }
+
+/* Chamadas do super admin (mesma Edge Function, valida no servidor). */
+export function adminAction(action, payload = {}) {
+  return billingPost(action, payload)
+}
+
+/* ============================== config global dos planos ============================== */
+
+const REST_BASE = BILLING_URL.replace(/\/functions\/v1\/.*$/, '')
+let planCfg = undefined
+let freeLimitValue = FREE_PROJECT_LIMIT
+
+export function getPlanConfig() {
+  return planCfg && typeof planCfg === 'object' ? planCfg : {}
+}
+
+export function freeProjectLimit() {
+  return freeLimitValue
+}
+
+function applyPlanConfig(data) {
+  const d = data && typeof data === 'object' ? data : {}
+  if (d.plans && typeof d.plans === 'object') {
+    for (const id of ['gratis', 'pro', 'ultra']) {
+      const c = d.plans[id]
+      if (!c || typeof c !== 'object') continue
+      if (c.label) PLANS[id].label = String(c.label)
+      if (c.priceLabel) PLANS[id].priceLabel = String(c.priceLabel)
+      if (Number.isFinite(Number(c.cents)) && Number(c.cents) >= 0) PLANS[id].cents = Number(c.cents)
+    }
+  }
+  if (d.once && typeof d.once === 'object') {
+    for (const id of ['1m', '3m']) {
+      const c = d.once[id]
+      if (!c || typeof c !== 'object') continue
+      if (c.label) ONCE_PLANS[id].label = String(c.label)
+      if (c.priceLabel) ONCE_PLANS[id].priceLabel = String(c.priceLabel)
+      if (Number.isFinite(Number(c.cents)) && Number(c.cents) > 0) ONCE_PLANS[id].cents = Number(c.cents)
+      if (Number.isFinite(Number(c.days)) && Number(c.days) > 0) ONCE_PLANS[id].days = Number(c.days)
+    }
+  }
+  const limit = Number(d.freeProjectLimit)
+  if (Number.isFinite(limit) && limit > 0) freeLimitValue = Math.round(limit)
+}
+
+/* Carrega (uma vez) a config global e aplica nos rótulos/preços do app.
+   Sem rede, mantém os padrões do código. */
+export function loadPlanConfig(force = false) {
+  if (planCfg !== undefined && !force) return Promise.resolve(planCfg)
+  if (!REST_BASE) {
+    planCfg = {}
+    return Promise.resolve(planCfg)
+  }
+  return fetch(REST_BASE + '/rest/v1/plan_config?id=eq.1&select=data', {
+    headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY }
+  })
+    .then((res) => res.json())
+    .then((rows) => {
+      const data = rows && rows[0] && rows[0].data ? rows[0].data : {}
+      applyPlanConfig(data)
+      planCfg = data
+      return planCfg
+    })
+    .catch(() => {
+      planCfg = {}
+      return planCfg
+    })
+}

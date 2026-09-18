@@ -32,6 +32,13 @@ export async function currentAccessToken() {
   }
 }
 
+export async function rpc(fn, args) {
+  if (!isConfigured()) throw new Error('Nuvem não configurada.')
+  const { data, error } = await client().rpc(fn, args || {})
+  if (error) throw new Error(error.message || 'Falha na consulta.')
+  return data
+}
+
 export function setAuthListener(fn) {
   listener = fn
 }
