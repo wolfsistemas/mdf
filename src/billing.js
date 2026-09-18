@@ -4,6 +4,10 @@ export const SALE = {
   email: 'wolfsaasbr@gmail.com'
 }
 
+/* Conta exclusiva do painel administrativo (admin.html). */
+export const ADMIN_EMAIL = 'wolfsaasbr@gmail.com'
+export const ADMIN_ALIAS = 'admin'
+
 export const FREE_PROJECT_LIMIT = 3
 
 export const PLANS = {

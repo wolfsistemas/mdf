@@ -7,10 +7,10 @@ import {
   billingConfigured,
   getPlanConfig,
   freeProjectLimit,
-  loadPlanConfig
+  loadPlanConfig,
+  ADMIN_EMAIL,
+  ADMIN_ALIAS
 } from './billing.js'
-
-export const ADMIN_EMAIL = 'admin@wolfsaas.com.br'
 
 const PLAN_IDS = ['gratis', 'pro', 'ultra']
 const ONCE_IDS = ['1m', '3m']
@@ -118,7 +118,7 @@ function loginCard(root) {
       onSubmit: async (e) => {
         e.preventDefault()
         const raw = email.value.trim()
-        const em = raw.toLowerCase() === 'admin' ? ADMIN_EMAIL : raw
+        const em = raw.toLowerCase() === ADMIN_ALIAS ? ADMIN_EMAIL : raw
         if (!em || !pass.value) return show('Informe usuário e senha.', 'err')
         btn.disabled = true
         show('Entrando...', '')

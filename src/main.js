@@ -53,6 +53,8 @@ import {
   isLimitedPlan,
   effectivePlan,
   billingConfigured,
+  ADMIN_EMAIL,
+  ADMIN_ALIAS,
   subscribePlan,
   checkoutOnceInfinity,
   confirmInfinity,
@@ -742,7 +744,17 @@ function applyCloudData(data) {
   persist({ silent: true })
 }
 
+function isAdminEmail(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase() === ADMIN_EMAIL
+}
+
 async function syncAfterLogin() {
+  if (isAdminEmail(authUser && authUser.email)) {
+    location.href = 'admin.html'
+    return
+  }
   try {
     const data = await pullState()
     if (data && data.settings) {
@@ -902,7 +914,8 @@ function authModal() {
     msgEl.className = 'auth-msg' + (kind ? ' ' + kind : '')
   }
   const run = async (mode) => {
-    const emailV = email.value.trim()
+    const raw = email.value.trim()
+    const emailV = raw.toLowerCase() === ADMIN_ALIAS ? ADMIN_EMAIL : raw
     const passV = pass.value
     if (!emailV || !passV) return setMsg('Preencha e-mail e senha.', 'err')
     setMsg(mode === 'in' ? 'Entrando…' : 'Criando conta…')
@@ -3812,5 +3825,13 @@ window.addEventListener('resize', () => {
   if (tab === 'corte' || tab === 'pecas' || tab === 'orcamento') render()
 })
 window.addEventListener('hashchange', showScreen)
+
+if (cloudConfigured()) {
+  cloudInit()
+    .then((u) => {
+      if (isAdminEmail(u && u.email)) location.replace('admin.html')
+    })
+    .catch(() => {})
+}
 
 Promise.race([loadPlanConfig(), new Promise((r) => setTimeout(r, 1500))]).finally(showScreen)
