@@ -43,7 +43,7 @@ import {
   pullState,
   schedulePush
 } from './cloud.js'
-import { landingHTML, termosHTML, privacidadeHTML } from './landing.js'
+import { landingHTML, termosHTML, privacidadeHTML, initLanding, stopLanding } from './landing.js'
 import {
   FREE_PROJECT_LIMIT,
   PLANS,
@@ -3711,6 +3711,7 @@ function showScreen() {
   const root = document.getElementById('app')
   document.body.style.overflow = ''
   if (desired === 'app') {
+    stopLanding()
     document.body.classList.remove('landing-mode')
     if (!appStarted) {
       appStarted = true
@@ -3746,8 +3747,13 @@ function showScreen() {
     root.innerHTML = ''
     const html = desired === 'termos' ? termosHTML() : desired === 'privacidade' ? privacidadeHTML() : landingHTML()
     root.insertAdjacentHTML('afterbegin', html)
-    if (desired === 'landing') scrollLanding()
-    else window.scrollTo(0, 0)
+    if (desired === 'landing') {
+      scrollLanding()
+      initLanding()
+    } else {
+      stopLanding()
+      window.scrollTo(0, 0)
+    }
   }
 }
 
