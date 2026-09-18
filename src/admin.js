@@ -1,4 +1,4 @@
-import { init as cloudInit, sessionUser, rpc, signOut as cloudSignOut } from './cloud.js'
+import { init as cloudInit, signIn, sessionUser, rpc, signOut as cloudSignOut } from './cloud.js'
 import {
   PLANS,
   ONCE_PLANS,
@@ -102,38 +102,71 @@ export function adminHTML() {
   </div>`
 }
 
-function loginCard() {
-  return h('div', { class: 'admin-center' }, [
-    h('div', { class: 'admin-card' }, [
-      h('h1', {}, ['Super admin']),
-      h('p', { class: 'help' }, ['Entre com a conta de administrador para gerenciar os planos.']),
-      h('div', { class: 'row', style: 'margin-top:14px' }, [
-        h('a', { class: 'btn primary', href: '#/app' }, ['Ir para o login'])
-      ])
-    ])
-  ])
+function loginCard(root) {
+  const email = h('input', { class: 'doc-input', type: 'email', placeholder: 'usuário', autocomplete: 'username' })
+  const pass = h('input', { class: 'doc-input', type: 'password', placeholder: 'Senha', autocomplete: 'current-password' })
+  const msg = h('div', { class: 'admin-msg', style: 'display:none' })
+  const show = (text, kind) => {
+    msg.textContent = text || ''
+    msg.className = 'admin-msg' + (kind ? ' ' + kind : '')
+    msg.style.display = text ? 'block' : 'none'
+  }
+  const btn = h('button', { class: 'btn primary', type: 'submit' }, ['Entrar'])
+  const form = h(
+    'form',
+    {
+      onSubmit: async (e) => {
+        e.preventDefault()
+        const raw = email.value.trim()
+        const em = raw.toLowerCase() === 'admin' ? ADMIN_EMAIL : raw
+        if (!em || !pass.value) return show('Informe usuário e senha.', 'err')
+        btn.disabled = true
+        show('Entrando...', '')
+        const res = await signIn(em, pass.value).catch((err) => ({ error: err.message }))
+        if (res.error) {
+          btn.disabled = false
+          return show(res.error, 'err')
+        }
+        const ok = await rpc('am_i_admin').catch(() => false)
+        if (!ok) {
+          await cloudSignOut().catch(() => {})
+          btn.disabled = false
+          return show('Esta conta não tem acesso ao painel.', 'err')
+        }
+        await refresh(root)
+      }
+    },
+    [
+      h('h1', {}, ['Acesso restrito']),
+      h('p', { class: 'help' }, ['Entre com a conta de administrador.']),
+      h('div', { style: 'margin-top:12px' }, [email]),
+      pass,
+      msg,
+      btn
+    ]
+  )
+  return h('div', { class: 'admin-center' }, [h('div', { class: 'admin-card admin-login' }, [form])])
 }
 
-function restrictedCard() {
+function restrictedCard(root) {
   return h('div', { class: 'admin-center' }, [
     h('div', { class: 'admin-card' }, [
       h('h1', {}, ['Acesso restrito']),
       h('p', { class: 'help' }, ['Esta conta não tem permissão de administrador.']),
       h('div', { class: 'row', style: 'margin-top:14px' }, [
-        h('a', { class: 'btn', href: '#/app' }, ['Voltar ao app']),
-        h('button', { class: 'btn ghost', onClick: doLogout }, ['Sair'])
+        h('button', { class: 'btn', onClick: () => doLogout(root) }, ['Sair'])
       ])
     ])
   ])
 }
 
-async function doLogout() {
+async function doLogout(root) {
   try {
     await cloudSignOut()
   } catch {
     /* segue */
   }
-  location.hash = '#/'
+  if (root) root.replaceChildren(loginCard(root))
 }
 
 /* ============================== init / load ============================== */
@@ -148,11 +181,11 @@ export async function initAdmin() {
   try {
     await cloudInit()
   } catch {
-    /* sem sessão */
+    /* sem sessao */
   }
   const u = sessionUser()
   if (!u) {
-    root.replaceChildren(loginCard())
+    root.replaceChildren(loginCard(root))
     return
   }
   let ok = false
@@ -162,7 +195,7 @@ export async function initAdmin() {
     ok = false
   }
   if (!ok) {
-    root.replaceChildren(restrictedCard())
+    root.replaceChildren(restrictedCard(root))
     return
   }
   await refresh(root)
@@ -170,7 +203,7 @@ export async function initAdmin() {
 
 function errorBox(text) {
   return h('div', { class: 'admin-center' }, [
-    h('div', { class: 'admin-card' }, [h('h1', {}, ['Super admin']), h('p', { class: 'help' }, [text])])
+    h('div', { class: 'admin-card' }, [h('h1', {}, ['Painel administrativo']), h('p', { class: 'help' }, [text])])
   ])
 }
 
@@ -208,14 +241,13 @@ function render(root) {
 function header() {
   return h('header', { class: 'admin-top' }, [
     h('div', { class: 'admin-brand' }, [
-      h('span', { class: 'mark' }, ['MDF ATELIER']),
-      h('strong', {}, ['Super admin']),
+      h('span', { class: 'mark' }, ['SUPER ADMIN']),
+      h('strong', {}, ['Painel administrativo']),
       h('span', { class: 'help' }, [sessionUser() ? sessionUser().email : ''])
     ]),
     h('div', { class: 'admin-top-actions' }, [
       h('button', { class: 'btn small', onClick: () => refresh(document.getElementById('admin-root')) }, ['Atualizar']),
-      h('a', { class: 'btn small ghost', href: '#/app' }, ['Ver app']),
-      h('button', { class: 'btn small ghost', onClick: doLogout }, ['Sair'])
+      h('button', { class: 'btn small ghost', onClick: () => doLogout(document.getElementById('admin-root')) }, ['Sair'])
     ])
   ])
 }
