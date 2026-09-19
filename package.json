@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:pages": "vite build --base=/mdf/",
+    "build:pages": "vite build --base=/nevoamdf/",
     "preview": "vite preview"
   },
   "dependencies": {

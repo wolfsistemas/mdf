@@ -83,8 +83,8 @@ abrir em tela cheia a partir da tela inicial.
 
 ## Publicar no GitHub Pages (teste)
 
-Este repositorio fica em `https://github.com/wolfsistemas/mdf`, entao o app e
-servido sob o caminho `/mdf/`. O build para Pages usa esse caminho:
+Este repositorio fica em `https://github.com/wolfsistemas/nevoamdf`, entao o app e
+servido sob o caminho `/nevoamdf/`. O build para Pages usa esse caminho:
 
 ```bash
 npm run build:pages
@@ -97,16 +97,16 @@ para `main` ou manualmente na aba Actions). Primeira vez, no GitHub:
    **Source: GitHub Actions** (o workflow cuida do resto).
 2. Suba o codigo para `main` (merge do branch de trabalho via Pull Request).
 3. Apos o workflow concluir, o app aparece em
-   `https://wolfsaas.com.br/mdf/` (o dominio antigo
-   `https://wolfsistemas.github.io/mdf/` redireciona para la).
+   `https://wolfsaas.com.br/nevoamdf/` (o dominio antigo
+   `https://wolfsistemas.github.io/nevoamdf/` redireciona para la).
 
 Importante: nesse modo os dados continuam no **localStorage** do navegador
 (dados por maquina, nada vai para um servidor).
 
 ## Landing page (site de vendas)
 
-A raiz (`/mdf/`) abre a pagina de apresentacao com recursos, plano de corte,
-ajuste manual, planos e FAQ; o app fica em `/mdf/#/app` (botao "Abrir o app" /
+A raiz (`/nevoamdf/`) abre a pagina de apresentacao com recursos, plano de corte,
+ajuste manual, planos e FAQ; o app fica em `/nevoamdf/#/app` (botao "Abrir o app" /
 "Testar gratis"). O hero traz um carrossel com telas do app desenhadas em
 HTML/CSS (sem imagens externas).
 

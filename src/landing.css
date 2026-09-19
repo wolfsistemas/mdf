@@ -1070,11 +1070,13 @@ body.landing-mode {
 }
 
 @supports (container-type: inline-size) {
-  .lshots .lshot-stage {
+  .lshots .lshot-stage,
+  .lspot-visual {
     container-type: inline-size;
   }
 
-  .lshots .mk {
+  .lshots .mk,
+  .lspot-visual .mk {
     --u: 2.17cqw;
   }
 }
@@ -1674,97 +1676,6 @@ body.landing-mode {
   .lshot-dot {
     width: 9px;
     height: 9px;
-  }
-
-  .lspot-visual .mk {
-    grid-template-columns: 84px 1fr;
-  }
-
-  .lspot-visual .mk-side {
-    padding: 10px 9px;
-    gap: 11px;
-  }
-
-  .lspot-visual .mk-brand {
-    font-size: 9px;
-  }
-
-  .lspot-visual .mk-nav span {
-    font-size: 9px;
-    padding: 5px 7px;
-  }
-
-  .lspot-visual .mk-main {
-    padding: 12px 13px;
-    gap: 10px;
-  }
-
-  .lspot-visual .mk-title {
-    font-size: 12px;
-  }
-
-  .lspot-visual .mk-actions span,
-  .lspot-visual .mk-modes span {
-    font-size: 9px;
-    padding: 4px 8px;
-  }
-
-  .lspot-visual .mk-field {
-    padding: 5px 7px;
-  }
-
-  .lspot-visual .mk-field label {
-    font-size: 8px;
-  }
-
-  .lspot-visual .mk-field b {
-    font-size: 11px;
-  }
-
-  .lspot-visual .mk-chips span,
-  .lspot-visual .mk-seq span,
-  .lspot-visual .mk-tools span {
-    font-size: 9px;
-    padding: 3px 8px;
-  }
-
-  .lspot-visual .mk-pc,
-  .lspot-visual .mk-hid,
-  .lspot-visual .mk-free,
-  .lspot-visual .mk-ghost {
-    font-size: 9px;
-  }
-
-  .lspot-visual .mk-stats {
-    width: 70px;
-  }
-
-  .lspot-visual .mk-stats b {
-    font-size: 13px;
-  }
-
-  .lspot-visual .mk-stats span {
-    font-size: 8px;
-  }
-
-  .lspot-visual .mk-table {
-    font-size: 10px;
-  }
-
-  .lspot-visual .mk-table th {
-    font-size: 8px;
-  }
-
-  .lspot-visual .mk-table td {
-    padding: 6px 5px;
-  }
-
-  .lspot-visual .mk-totals b {
-    font-size: 12px;
-  }
-
-  .lspot-visual .mk-totals span {
-    font-size: 8px;
   }
 
   .lsec-sub {

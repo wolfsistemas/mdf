@@ -211,7 +211,7 @@ const SHOTS = [
 ]
 
 function windowBar() {
-  return `<div class="lshot-bar"><i></i><i></i><i></i><em>wolfsaas.com.br/mdf/#/app</em></div>`
+  return `<div class="lshot-bar"><i></i><i></i><i></i><em>wolfsaas.com.br/nevoamdf/#/app</em></div>`
 }
 
 function shotsHTML() {
