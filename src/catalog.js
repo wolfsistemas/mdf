@@ -614,8 +614,8 @@ function drawerInternal(p, frontH, name) {
   const boxD = Math.max(80, Number(p.boxD) || 300)
   return [
     part(name + ' — lateral', boxD, boxH, 15, 2, 'comprimento', edges(false, false, true, false), true),
-    part(name + ' — fundo', boxW, boxD, 15, 1, 'livre', edges(false, false, false, false), true),
-    part(name + ' — base', boxW, boxH, 15, 1, 'livre', edges(false, false, false, false), true)
+    part(name + ' — base', boxW, boxD, 15, 1, 'livre', edges(false, false, false, false), true),
+    part(name + ' — fundo', boxW, boxH, 15, 1, 'livre', edges(false, false, false, false), true)
   ].filter(Boolean)
 }
 

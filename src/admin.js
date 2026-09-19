@@ -6,6 +6,7 @@ import {
   adminAction,
   billingConfigured,
   getPlanConfig,
+  applyPlanConfig,
   freeProjectLimit,
   loadPlanConfig,
   ADMIN_EMAIL,
@@ -219,6 +220,7 @@ async function refresh(root) {
     st.stats = (statsR && statsR.stats) || {}
     st.rows = (listR && listR.rows) || []
     st.config = (cfgR && cfgR.data) || {}
+    applyPlanConfig(st.config)
     st.audit = (auditR && auditR.rows) || []
     st.loaded = true
   } catch (err) {
@@ -458,7 +460,7 @@ function numFromCents(cents) {
 }
 
 function configView() {
-  const cfg = getPlanConfig()
+  const cfg = st.config && Object.keys(st.config).length ? st.config : getPlanConfig()
   const fields = {}
   const money = (key, cents) =>
     (fields[key] = h('input', { type: 'number', min: '0', step: '0.01', class: 'doc-input', value: numFromCents(cents) }))

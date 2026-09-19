@@ -216,9 +216,10 @@ function coverPage(doc, project, settings, summary, pageW, pageH, margin) {
   doc.setFontSize(11)
   doc.setTextColor(168, 154, 138)
   const date = new Date().toLocaleString('pt-BR')
-  const clientLine = project.client ? `Cliente: ${project.client}` : ''
+  const clientName = project.client ? `Cliente: ${project.client}` : ''
   const phoneLine = project.phone ? ` · ${project.phone}` : ''
-  doc.text(`${clientLine}${phoneLine}`.trim() || `Gerado em ${date}`, margin + 6, 50)
+  const clientLine = `${clientName}${phoneLine}`.trim()
+  if (clientLine) doc.text(clientLine, margin + 6, 50)
   doc.text(`Gerado em ${date}`, margin + 6, 58)
   if (project.notes) {
     const notes = doc.splitTextToSize(project.notes, pageW - margin * 2 - 20)
@@ -521,9 +522,16 @@ function slug(name) {
 }
 
 function download(blob, filename) {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
+  a.href = url
   a.download = filename
+  a.rel = 'noopener'
+  a.style.display = 'none'
+  document.body.append(a)
   a.click()
-  URL.revokeObjectURL(a.href)
+  setTimeout(() => {
+    a.remove()
+    URL.revokeObjectURL(url)
+  }, 0)
 }

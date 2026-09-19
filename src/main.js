@@ -345,7 +345,7 @@ function specBullets(item) {
   const H = Math.round(numP(p, 'height', 0))
   const D = Math.round(numP(p, 'depth', 0))
   if (type === 'mesa') {
-    const totalW = W + (numP(p, 'retLen') ? Math.round(numP(p, 'retLen') || 0) : 0)
+    const totalW = W + (numP(p, 'retDepth') ? Math.round(numP(p, 'retDepth') || 0) : 0)
     out.push(`Plano de ${W} × ${Math.round(numP(p, 'depth', 0))} mm${numP(p, 'retLen') ? ` + retorno de ${Math.round(numP(p, 'retLen') || 0)} mm` : ''} (largura útil total ${totalW} mm)`)
     out.push(`Altura de ${Math.round(numP(p, 'height', 750))} mm`)
     const th = Math.round(numP(p, 'thickness', 15))

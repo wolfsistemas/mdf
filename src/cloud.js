@@ -87,11 +87,17 @@ export async function signOut() {
   signingOut = true
   user = null
   emit()
-  const { error } = await client().auth.signOut()
+  let error = null
+  try {
+    const res = await client().auth.signOut()
+    error = res.error
+  } catch (err) {
+    error = err
+  }
   user = null
   signingOut = false
   emit()
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: error.message || String(error) } : { ok: true }
 }
 
 function authUserId() {
@@ -101,20 +107,23 @@ function authUserId() {
 /* ============================== estado ============================== */
 
 export function schedulePush(state) {
-  if (!isConfigured() || !authUserId()) return
-  chain = chain.then(() => pushState(state)).catch((err) => console.warn('push', err))
-  return chain
+  if (!isConfigured() || !authUserId()) return Promise.resolve()
+  const run = chain.then(() => pushState(state))
+  chain = run.catch((err) => console.warn('push', err))
+  return run
 }
 
 async function pushState(state) {
   const uid = authUserId()
   if (!uid) return
+  const dbc = client()
   const settings = { ...(state.settings || {}) }
   delete settings.plan
   delete settings.planExpiresAt
-  await client()
+  const { error: profErr } = await dbc
     .from('profiles')
     .upsert({ id: uid, settings, active_project_id: state.activeProjectId || null }, { onConflict: 'id' })
+  if (profErr) throw profErr
 
   const rows = (state.projects || []).map((p) => ({
     id: p.id,
@@ -128,9 +137,19 @@ async function pushState(state) {
     created_at: new Date(p.createdAt || Date.now()).toISOString()
   }))
 
-  const dbc = client()
-  await dbc.from('projects').delete().eq('user_id', uid)
-  if (rows.length) await dbc.from('projects').insert(rows)
+  if (rows.length) {
+    const { error: upErr } = await dbc.from('projects').upsert(rows, { onConflict: 'id' })
+    if (upErr) throw upErr
+  }
+
+  const { data: existing, error: selErr } = await dbc.from('projects').select('id').eq('user_id', uid)
+  if (selErr) throw selErr
+  const keep = new Set(rows.map((r) => r.id))
+  const stale = (existing || []).map((r) => r.id).filter((id) => !keep.has(id))
+  for (const id of stale) {
+    const { error: delErr } = await dbc.from('projects').delete().eq('user_id', uid).eq('id', id)
+    if (delErr) throw delErr
+  }
 }
 
 export async function pullState() {
@@ -138,17 +157,19 @@ export async function pullState() {
   if (!uid) return null
   const dbc = client()
 
-  const { data: prof } = await dbc
+  const { data: prof, error: profErr } = await dbc
     .from('profiles')
     .select('settings, active_project_id, plan, plan_expires_at, mp_subscription_status')
     .eq('id', uid)
     .maybeSingle()
-  const { data: rows } = await dbc
+  if (profErr) throw profErr
+  const { data: rows, error: rowsErr } = await dbc
     .from('projects')
     .select('*')
     .eq('user_id', uid)
     .order('created_at', { ascending: false })
     .order('updated_at', { ascending: false })
+  if (rowsErr) throw rowsErr
 
   const settings =
     prof && prof.settings && Object.keys(prof.settings).length ? { ...prof.settings } : {}

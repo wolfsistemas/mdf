@@ -562,7 +562,11 @@ export function applyManualMoves(layout, moves) {
     }
   }
   if (uids.length) {
-    for (const b of boards) refreshBoard(b)
+    layout.boards = boards.filter((b) => b.placements.length)
+    layout.boards.forEach((b, i) => {
+      b.index = i + 1
+    })
+    for (const b of layout.boards) refreshBoard(b)
     refreshLayout(layout)
   }
   return layout
@@ -648,22 +652,16 @@ export function nest(pieces, settings) {
   }
   if (!specs.length) return empty
 
-  const itemFits = (item, sp) => {
-    const W = sp.width - 2 * trim
-    const H = sp.height - 2 * trim
-    return fits(W, H, item.length, item.width) || fits(W, H, item.width, item.length)
-  }
-  const specForItem = (item) => {
-    let exact = null
-    let any = null
+  const specCandidates = (item) => {
+    const out = []
     for (const sp of specs) {
-      if (!itemFits(item, sp)) continue
-      const area = sp.width * sp.height
-      const cand = { sp, area }
-      if (!any || area < any.area) any = cand
-      if (sp.thickness === item.thickness && (!exact || area < exact.area)) exact = cand
+      const W = sp.width - 2 * trim
+      const H = sp.height - 2 * trim
+      if (!fits(W, H, item.length, item.width) && !fits(W, H, item.width, item.length)) continue
+      out.push({ sp, area: sp.width * sp.height, exact: sp.thickness === item.thickness })
     }
-    return exact || any
+    out.sort((a, b) => (b.exact ? 1 : 0) - (a.exact ? 1 : 0) || a.area - b.area)
+    return out
   }
 
   const areaSort = (a, b) => {
@@ -683,12 +681,6 @@ export function nest(pieces, settings) {
     const boards = []
     const unplaced = []
     for (const item of items) {
-      const pick = specForItem(item)
-      if (!pick) {
-        unplaced.push(item)
-        continue
-      }
-
       let placed = false
       if (mode === 'free') {
         for (const board of boards) {
@@ -710,11 +702,16 @@ export function nest(pieces, settings) {
         if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
       }
       if (!placed) {
-        const board = newBoard(pick.sp.width - 2 * trim, pick.sp.height - 2 * trim, mode, item.thickness)
-        board.spec = pick.sp
-        placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
-        if (placed) boards.push(board)
-        else unplaced.push(item)
+        for (const pick of specCandidates(item)) {
+          const board = newBoard(pick.sp.width - 2 * trim, pick.sp.height - 2 * trim, mode, item.thickness)
+          board.spec = pick.sp
+          placed = mode === 'free' ? placeFree(board, item, kerf) : placeGuillotine(board, item, kerf)
+          if (placed) {
+            boards.push(board)
+            break
+          }
+        }
+        if (!placed) unplaced.push(item)
       }
     }
 
@@ -802,11 +799,6 @@ export function nest(pieces, settings) {
     const unplaced = []
     const list = transpose ? items.map((p) => ({ ...p, length: p.width, width: p.length })) : items
     for (const item of [...list].sort(sorter)) {
-      const pick = specForItem(item)
-      if (!pick) {
-        unplaced.push(item)
-        continue
-      }
       let placed = false
       let bestBoard = null
       let bestCost = Infinity
@@ -820,13 +812,18 @@ export function nest(pieces, settings) {
       }
       if (bestBoard) placed = placeGuillotine(bestBoard, item, kerf)
       if (!placed) {
-        const W = pick.sp.width - 2 * trim
-        const H = pick.sp.height - 2 * trim
-        const board = newBoard(transpose ? H : W, transpose ? W : H, 'guillotine', item.thickness)
-        board.spec = pick.sp
-        placed = placeGuillotine(board, item, kerf)
-        if (placed) boards.push(board)
-        else unplaced.push(item)
+        for (const pick of specCandidates(item)) {
+          const W = pick.sp.width - 2 * trim
+          const H = pick.sp.height - 2 * trim
+          const board = newBoard(transpose ? H : W, transpose ? W : H, 'guillotine', item.thickness)
+          board.spec = pick.sp
+          placed = placeGuillotine(board, item, kerf)
+          if (placed) {
+            boards.push(board)
+            break
+          }
+        }
+        if (!placed) unplaced.push(item)
       }
     }
     const compacted = compactGuillotineBoards(boards, kerf)
@@ -845,9 +842,16 @@ export function nest(pieces, settings) {
           p.h = w
           p.length = p.width
           p.width = l
-          p.rotated = !p.rotated
         }
       }
+    }
+    for (const b of compacted) {
+      const ordered = [...b.placements].sort(
+        b.vertical ? (a, c) => a.x - c.x || a.y - c.y : (a, c) => a.y - c.y || a.x - c.x
+      )
+      ordered.forEach((p, i) => {
+        p.order = i + 1
+      })
     }
     return { boards: compacted, unplaced }
   }

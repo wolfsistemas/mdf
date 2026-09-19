@@ -226,7 +226,7 @@ export function freeProjectLimit() {
   return freeLimitValue
 }
 
-function applyPlanConfig(data) {
+export function applyPlanConfig(data) {
   const d = data && typeof data === 'object' ? data : {}
   if (d.plans && typeof d.plans === 'object') {
     for (const id of ['gratis', 'pro', 'ultra']) {
@@ -262,15 +262,15 @@ export function loadPlanConfig(force = false) {
   return fetch(REST_BASE + '/rest/v1/plan_config?id=eq.1&select=data', {
     headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY }
   })
-    .then((res) => res.json())
+    .then((res) => {
+      if (!res.ok) throw new Error('plan_config ' + res.status)
+      return res.json()
+    })
     .then((rows) => {
       const data = rows && rows[0] && rows[0].data ? rows[0].data : {}
       applyPlanConfig(data)
       planCfg = data
       return planCfg
     })
-    .catch(() => {
-      planCfg = {}
-      return planCfg
-    })
+    .catch(() => planCfg)
 }
